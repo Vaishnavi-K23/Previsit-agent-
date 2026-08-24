@@ -186,6 +186,20 @@ def write_data_model_doc(inventory: dict, out_path: Path, source_dir: Path) -> N
         "`exporter.fhir_dstu2.export = false`), matching the spec requirement — not "
         "assumed."
     )
+    lines.append(
+        "- **`DiagnosticReport.conclusion` is empty in all 152,112 reports in this "
+        "dataset** (checked every one, not a sample). The actual narrative note text "
+        "lives in `presentedForm[].data`, base64-encoded. Relevant for Phase 4 (note "
+        "retrieval), which the spec anticipated might need adjusting: "
+        "\"check what your generation actually produced.\""
+    )
+    lines.append(
+        "- **Observation `component[]` panels (e.g. blood pressure) hold their own "
+        "codes and values separately from the parent's `.code`**, and the parent "
+        "itself usually carries no `valueQuantity` of its own. Phase 2's loader "
+        "expands each component into its own `fact_observation` row rather than "
+        "trying to force multiple values into one row."
+    )
     lines.append("")
 
     lines.append("## Resource type counts")

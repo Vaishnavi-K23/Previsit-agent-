@@ -9,6 +9,8 @@
 - **Bundle count vs. population target:** `-p 1000` targets 1000 *living* patients at simulation end, not 1000 total bundles. Synthea also generates deceased patients along the way for demographic realism and keeps them in the output — this run produced 1000 living + 175 deceased = 1175 patient bundles. Kept intentionally: Phase 3's care-gap rules must exclude deceased patients, so real deceased records let that exclusion be tested for real.
 - **The clinical code field is not uniformly `.code` across resource types.** Verified against actual output, not assumed: `Immunization` uses `.vaccineCode`, `MedicationRequest` uses `.medicationCodeableConcept`, `CarePlan` has no top-level `.code` at all (uses `.category`), and `Encounter.class` is a bare `Coding`, not a `CodeableConcept` (so it has no `.coding[]` array — pull `system`/`code`/`display` directly off it).
 - **FHIR version confirmed R4** empirically from the jar's bundled `synthea.properties` (`exporter.fhir_stu3.export = false`, `exporter.fhir_dstu2.export = false`), matching the spec requirement — not assumed.
+- **`DiagnosticReport.conclusion` is empty in all 152,112 reports in this dataset** (checked every one, not a sample). The actual narrative note text lives in `presentedForm[].data`, base64-encoded. Relevant for Phase 4 (note retrieval), which the spec anticipated might need adjusting: "check what your generation actually produced."
+- **Observation `component[]` panels (e.g. blood pressure) hold their own codes and values separately from the parent's `.code`**, and the parent itself usually carries no `valueQuantity` of its own. Phase 2's loader expands each component into its own `fact_observation` row rather than trying to force multiple values into one row.
 
 ## Resource type counts
 
@@ -42,373 +44,6 @@
 ## Codes observed per resource type
 
 Every distinct `(system, code, display)` triple actually present, sorted by frequency. These are Synthea's synthetic code sets, not guaranteed identical across Synthea versions — this is why the engine (Phase 3) looks codes up empirically rather than assuming them.
-
-### Encounter (58 distinct codes)
-
-| Count | System | Code | Display |
-|---|---|---|---|
-| 68304 | http://terminology.hl7.org/CodeSystem/v3-ActCode | AMB | (no display) |
-| 19668 | http://snomed.info/sct | 185347001 | Encounter for problem (procedure) |
-| 12506 | http://snomed.info/sct | 185349003 | Encounter for check up (procedure) |
-| 10784 | http://snomed.info/sct | 162673000 | General examination of patient (procedure) |
-| 3986 | http://snomed.info/sct | 702927004 | Urgent care clinic (environment) |
-| 3867 | http://snomed.info/sct | 185345009 | Encounter for symptom (procedure) |
-| 3555 | http://snomed.info/sct | 410620009 | Well child visit (procedure) |
-| 2899 | http://terminology.hl7.org/CodeSystem/v3-ActCode | EMER | (no display) |
-| 2550 | http://snomed.info/sct | 424619006 | Prenatal visit (regime/therapy) |
-| 2279 | http://snomed.info/sct | 50849002 | Emergency room admission (procedure) |
-| 1866 | http://snomed.info/sct | 308335008 | Patient encounter procedure (procedure) |
-| 1841 | http://snomed.info/sct | 371883000 | Outpatient procedure (procedure) |
-| 1772 | http://snomed.info/sct | 390906007 | Follow-up encounter (procedure) |
-| 1484 | http://terminology.hl7.org/CodeSystem/v3-ActCode | IMP | (no display) |
-| 1334 | http://snomed.info/sct | 33879002 | Administration of vaccine to produce active immunity (procedure) |
-| 1211 | http://snomed.info/sct | 698314001 | Consultation for treatment (procedure) |
-| 1069 | http://snomed.info/sct | 36228007 | Ophthalmic examination and evaluation (procedure) |
-| 864 | http://snomed.info/sct | 448337001 | Telemedicine consultation with patient (procedure) |
-| 609 | http://terminology.hl7.org/CodeSystem/v3-ActCode | HH | (no display) |
-| 466 | http://snomed.info/sct | 424441002 | Prenatal initial visit (regime/therapy) |
-| 425 | http://snomed.info/sct | 439708006 | Home visit (procedure) |
-| 397 | http://snomed.info/sct | 439740005 | Postoperative follow-up visit (procedure) |
-| 331 | http://snomed.info/sct | 32485007 | Hospital admission (procedure) |
-| 323 | http://snomed.info/sct | 394701000 | Asthma follow-up (regime/therapy) |
-| 270 | http://snomed.info/sct | 169762003 | Postnatal visit (regime/therapy) |
-| 269 | http://snomed.info/sct | 183460006 | Obstetric emergency hospital admission (procedure) |
-| 209 | http://snomed.info/sct | 56876005 | Drug rehabilitation and detoxification (regime/therapy) |
-| 184 | http://snomed.info/sct | 305336008 | Admission to hospice (procedure) |
-| 168 | http://snomed.info/sct | 308646001 | Death Certification |
-| 152 | http://terminology.hl7.org/CodeSystem/v3-ActCode | VR | (no display) |
-| 151 | http://snomed.info/sct | 410410006 | Screening surveillance (regime/therapy) |
-| 133 | http://snomed.info/sct | 305408004 | Admission to surgical department (procedure) |
-| 128 | http://snomed.info/sct | 183452005 | Emergency hospital admission (procedure) |
-| 109 | http://snomed.info/sct | 310061009 | Gynecology service (qualifier value) |
-| 82 | http://snomed.info/sct | 270427003 | Patient-initiated encounter (procedure) |
-| 72 | http://snomed.info/sct | 305351004 | Admission to intensive care unit (procedure) |
-| 66 | http://snomed.info/sct | 305342007 | Admission to ward (procedure) |
-| 62 | http://snomed.info/sct | 281036007 | Follow-up consultation (procedure) |
-| 56 | http://snomed.info/sct | 210098006 | Domiciliary or rest home patient evaluation and management (procedure) |
-| 55 | http://snomed.info/sct | 170837001 | Allergic disorder initial assessment (regime/therapy) |
-| 54 | http://snomed.info/sct | 397821002 | Patient transfer to intensive care unit (procedure) |
-| 54 | http://snomed.info/sct | 183478001 | Emergency hospital admission for asthma (procedure) |
-| 48 | http://snomed.info/sct | 305432006 | Admission to surgical transplant department (procedure) |
-| 35 | http://snomed.info/sct | 170838006 | Allergic disorder follow-up assessment (regime/therapy) |
-| 30 | http://snomed.info/sct | 185389009 | Follow-up visit (procedure) |
-| 25 | http://snomed.info/sct | 185317003 | Telephone encounter (procedure) |
-| 22 | http://snomed.info/sct | 183495009 | Non-urgent orthopedic admission (procedure) |
-| 12 | http://snomed.info/sct | 453131000124105 | Videotelephony encounter (procedure) |
-| 10 | http://snomed.info/sct | 305411003 | Admission to thoracic surgery department (procedure) |
-| 9 | http://snomed.info/sct | 1505002 | Hospital admission for isolation (procedure) |
-| 9 | http://snomed.info/sct | 47505003 | Posttraumatic stress disorder (disorder) |
-| 7 | http://snomed.info/sct | 86013001 | Periodic reevaluation and management of healthy individual (procedure) |
-| 6 | http://snomed.info/sct | 79094001 | Initial psychiatric interview with mental status and evaluation (procedure) |
-| 6 | http://snomed.info/sct | 223484005 | Discussion about treatment (procedure) |
-| 5 | http://snomed.info/sct | 308251003 | Admission to clinical oncology department (procedure) |
-| 4 | http://snomed.info/sct | 4525004 | Emergency department patient visit (procedure) |
-| 3 | http://snomed.info/sct | 386395000 | Preoperative coordination (regime/therapy) |
-| 1 | http://snomed.info/sct | 108219001 | Physician visit with evaluation AND/OR management service (procedure) |
-
-### Condition (257 distinct codes)
-
-| Count | System | Code | Display |
-|---|---|---|---|
-| 9180 | http://snomed.info/sct | 314529007 | Medication review due (situation) |
-| 3622 | http://snomed.info/sct | 73595000 | Stress (finding) |
-| 3360 | http://snomed.info/sct | 66383009 | Gingivitis (disorder) |
-| 3337 | http://snomed.info/sct | 160903007 | Full-time employment (finding) |
-| 2010 | http://snomed.info/sct | 160904001 | Part-time employment (finding) |
-| 1353 | http://snomed.info/sct | 422650009 | Social isolation (finding) |
-| 1259 | http://snomed.info/sct | 423315002 | Limited social contact (finding) |
-| 1239 | http://snomed.info/sct | 444814009 | Viral sinusitis (disorder) |
-| 1174 | http://snomed.info/sct | 741062008 | Not in labor force (finding) |
-| 1021 | http://snomed.info/sct | 18718003 | Gingival disease (disorder) |
-| 869 | http://snomed.info/sct | 706893006 | Victim of intimate partner abuse (finding) |
-| 750 | http://snomed.info/sct | 109570002 | Primary dental caries (disorder) |
-| 690 | http://snomed.info/sct | 424393004 | Reports of violence in the environment (finding) |
-| 650 | http://snomed.info/sct | 195662009 | Acute viral pharyngitis (disorder) |
-| 596 | http://snomed.info/sct | 162864005 | Body mass index 30+ - obesity (finding) |
-| 580 | http://snomed.info/sct | 73438004 | Unemployed (finding) |
-| 567 | http://snomed.info/sct | 10509002 | Acute bronchitis (disorder) |
-| 520 | http://snomed.info/sct | 224299000 | Received higher education (finding) |
-| 475 | http://snomed.info/sct | 714628002 | Prediabetes (finding) |
-| 453 | http://snomed.info/sct | 72892002 | Normal pregnancy (finding) |
-| 451 | http://snomed.info/sct | 271737000 | Anemia (disorder) |
-| 296 | http://snomed.info/sct | 160968000 | Risk activity involvement (finding) |
-| 287 | http://snomed.info/sct | 82423001 | Chronic pain (finding) |
-| 272 | http://snomed.info/sct | 473461003 | Educated to high school level (finding) |
-| 270 | http://snomed.info/sct | 266948004 | Has a criminal record (finding) |
-| 262 | http://snomed.info/sct | 40055000 | Chronic sinusitis (disorder) |
-| 260 | http://snomed.info/sct | 59621000 | Essential hypertension (disorder) |
-| 231 | http://snomed.info/sct | 1149222004 | Overdose (disorder) |
-| 215 | http://snomed.info/sct | 427898007 | Infection of tooth (disorder) |
-| 212 | http://snomed.info/sct | 161744009 | Past pregnancy history of miscarriage (situation) |
-| 203 | http://snomed.info/sct | 414545008 | Ischemic heart disease (disorder) |
-| 203 | http://snomed.info/sct | 274531002 | Abnormal findings diagnostic imaging heart+coronary circulat (finding) |
-| 201 | http://snomed.info/sct | 237602007 | Metabolic syndrome X (disorder) |
-| 201 | http://snomed.info/sct | 278860009 | Chronic low back pain (finding) |
-| 188 | http://snomed.info/sct | 10939881000119105 | Unhealthy alcohol drinking behavior (finding) |
-| 179 | http://snomed.info/sct | 125605004 | Fracture of bone (disorder) |
-| 176 | http://snomed.info/sct | 278588009 | Fractured dental filling (finding) |
-| 172 | http://snomed.info/sct | 43878008 | Streptococcal sore throat (disorder) |
-| 170 | http://snomed.info/sct | 278598003 | Leaking dental filling (finding) |
-| 167 | http://snomed.info/sct | 384709000 | Sprain (morphologic abnormality) |
-| 163 | http://snomed.info/sct | 312608009 | Laceration - injury (disorder) |
-| 163 | http://snomed.info/sct | 278558000 | Dental filling lost (finding) |
-| 158 | http://snomed.info/sct | 224295006 | Only received primary school education (finding) |
-| 155 | http://snomed.info/sct | 65363002 | Otitis media (disorder) |
-| 152 | http://snomed.info/sct | 80583007 | Severe anxiety (panic) (finding) |
-| 151 | http://snomed.info/sct | 37320007 | Loss of teeth (disorder) |
-| 150 | http://snomed.info/sct | 278602001 | Loose dental filling (finding) |
-| 134 | http://snomed.info/sct | 127013003 | Disorder of kidney due to diabetes mellitus (disorder) |
-| 133 | http://snomed.info/sct | 307426000 | Acute infective cystitis (disorder) |
-| 128 | http://snomed.info/sct | 55822004 | Hyperlipidemia (disorder) |
-| 126 | http://snomed.info/sct | 431855005 | Chronic kidney disease stage 1 (disorder) |
-| 125 | http://snomed.info/sct | 105531004 | Housing unsatisfactory (finding) |
-| 123 | http://snomed.info/sct | 267020005 | History of tubal ligation (situation) |
-| 122 | http://snomed.info/sct | 1121000119107 | Chronic neck pain (finding) |
-| 118 | http://snomed.info/sct | 446654005 | Refugee (person) |
-| 117 | http://snomed.info/sct | 68496003 | Polyp of colon (disorder) |
-| 112 | http://snomed.info/sct | 44465007 | Sprain of ankle (disorder) |
-| 110 | http://snomed.info/sct | 302870006 | Hypertriglyceridemia (disorder) |
-| 109 | http://snomed.info/sct | 44054006 | Diabetes mellitus type 2 (disorder) |
-| 107 | http://snomed.info/sct | 90781000119102 | Microalbuminuria due to type 2 diabetes mellitus (disorder) |
-| 101 | http://snomed.info/sct | 431856006 | Chronic kidney disease stage 2 (disorder) |
-| 101 | http://snomed.info/sct | 840544004 | Suspected disease caused by Severe acute respiratory coronavirus 2 (situation) |
-| 95 | http://snomed.info/sct | 840539006 | Disease caused by severe acute respiratory syndrome coronavirus 2 (disorder) |
-| 91 | http://snomed.info/sct | 386661006 | Fever (finding) |
-| 90 | http://snomed.info/sct | 399261000 | History of coronary artery bypass grafting (situation) |
-| 90 | http://snomed.info/sct | 361055000 | Misuses drugs (finding) |
-| 79 | http://snomed.info/sct | 110030002 | Concussion injury of brain (disorder) |
-| 78 | http://snomed.info/sct | 124171000119105 | Chronic intractable migraine without aura (disorder) |
-| 76 | http://snomed.info/sct | 157141000119108 | Proteinuria due to type 2 diabetes mellitus (disorder) |
-| 75 | http://snomed.info/sct | 6525002 | Dependent drug abuse (disorder) |
-| 74 | http://snomed.info/sct | 196416002 | Impacted molars (disorder) |
-| 72 | http://snomed.info/sct | 19169002 | Miscarriage in first trimester (disorder) |
-| 70 | http://snomed.info/sct | 49727002 | Cough (finding) |
-| 69 | http://snomed.info/sct | 239873007 | Osteoarthritis of knee (disorder) |
-| 69 | http://snomed.info/sct | 433144002 | Chronic kidney disease stage 3 (disorder) |
-| 66 | http://snomed.info/sct | 75498004 | Acute bacterial sinusitis (disorder) |
-| 62 | http://snomed.info/sct | 36971009 | Sinusitis (disorder) |
-| 61 | http://snomed.info/sct | 80394007 | Hyperglycemia (disorder) |
-| 61 | http://snomed.info/sct | 62106007 | Concussion with no loss of consciousness (disorder) |
-| 61 | http://snomed.info/sct | 48333001 | Burn injury (morphologic abnormality) |
-| 60 | http://snomed.info/sct | 90460009 | Injury of neck (disorder) |
-| 60 | http://snomed.info/sct | 39848009 | Whiplash injury to neck (disorder) |
-| 59 | http://snomed.info/sct | 128613002 | Seizure disorder (disorder) |
-| 59 | http://snomed.info/sct | 1290882004 | History of seizure (situation) |
-| 55 | http://snomed.info/sct | 70704007 | Sprain of wrist (disorder) |
-| 53 | http://snomed.info/sct | 39898005 | Sleep disorder (disorder) |
-| 53 | http://snomed.info/sct | 428251008 | History of appendectomy (situation) |
-| 52 | http://snomed.info/sct | 64859006 | Osteoporosis (disorder) |
-| 52 | http://snomed.info/sct | 36955009 | Loss of taste (finding) |
-| 52 | http://snomed.info/sct | 266934004 | Transport problem (finding) |
-| 51 | http://snomed.info/sct | 713458007 | Lack of access to transportation (finding) |
-| 49 | http://snomed.info/sct | 197927001 | Recurrent urinary tract infection (disorder) |
-| 47 | http://snomed.info/sct | 61804006 | Alveolitis of jaw (disorder) |
-| 46 | http://snomed.info/sct | 195967001 | Asthma (disorder) |
-| 45 | http://snomed.info/sct | 698306007 | Awaiting transplantation of kidney (situation) |
-| 44 | http://snomed.info/sct | 399211009 | History of myocardial infarction (situation) |
-| 44 | http://snomed.info/sct | 78275009 | Obstructive sleep apnea syndrome (disorder) |
-| 43 | http://snomed.info/sct | 65966004 | Fracture of forearm (disorder) |
-| 43 | http://snomed.info/sct | 84229001 | Fatigue (finding) |
-| 42 | http://snomed.info/sct | 431857002 | Chronic kidney disease stage 4 (disorder) |
-| 41 | http://snomed.info/sct | 161665007 | History of renal transplant (situation) |
-| 41 | http://snomed.info/sct | 156073000 | Complete miscarriage (disorder) |
-| 38 | http://snomed.info/sct | 283385000 | Laceration of thigh (disorder) |
-| 38 | http://snomed.info/sct | 1551000119108 | Nonproliferative diabetic retinopathy due to type II diabetes mellitus |
-| 38 | http://snomed.info/sct | 1187604002 | Serving in military service (finding) |
-| 38 | http://snomed.info/sct | 16114001 | Fracture of ankle (disorder) |
-| 37 | http://snomed.info/sct | 201834006 | Localized, primary osteoarthritis of the hand (disorder) |
-| 36 | http://snomed.info/sct | 403190006 | Epidermal burn of skin (disorder) |
-| 35 | http://snomed.info/sct | 91302008 | Sepsis (disorder) |
-| 35 | http://snomed.info/sct | 284551006 | Laceration of foot (disorder) |
-| 34 | http://snomed.info/sct | 58150001 | Fracture of clavicle (disorder) |
-| 34 | http://snomed.info/sct | 88805009 | Chronic congestive heart failure (disorder) |
-| 34 | http://snomed.info/sct | 284549007 | Laceration of hand (disorder) |
-| 33 | http://snomed.info/sct | 24079001 | Atopic dermatitis (disorder) |
-| 32 | http://snomed.info/sct | 263102004 | Fracture subluxation of wrist (disorder) |
-| 32 | http://snomed.info/sct | 446096008 | Perennial allergic rhinitis (disorder) |
-| 31 | http://snomed.info/sct | 233678006 | Childhood asthma (disorder) |
-| 31 | http://snomed.info/sct | 398254007 | Pre-eclampsia (disorder) |
-| 29 | http://snomed.info/sct | 84757009 | Epilepsy (disorder) |
-| 29 | http://snomed.info/sct | 368581000119106 | Neuropathy due to type 2 diabetes mellitus (disorder) |
-| 29 | http://snomed.info/sct | 26929004 | Alzheimer's disease (disorder) |
-| 29 | http://snomed.info/sct | 283371005 | Laceration of forearm (disorder) |
-| 29 | http://snomed.info/sct | 87433001 | Pulmonary emphysema (disorder) |
-| 28 | http://snomed.info/sct | 22298006 | Myocardial infarction (disorder) |
-| 28 | http://snomed.info/sct | 183996000 | Sterilization requested (situation) |
-| 27 | http://snomed.info/sct | 203082005 | Fibromyalgia (disorder) |
-| 27 | http://snomed.info/sct | 370247008 | Facial laceration (disorder) |
-| 27 | http://snomed.info/sct | 248595008 | Sputum finding (finding) |
-| 27 | http://snomed.info/sct | 713197008 | Recurrent rectal polyp (disorder) |
-| 27 | http://snomed.info/sct | 203646004 | Adolescent idiopathic scoliosis (disorder) |
-| 27 | http://snomed.info/sct | 125601008 | Injury of knee (disorder) |
-| 25 | http://snomed.info/sct | 401303003 | Acute ST segment elevation myocardial infarction (disorder) |
-| 25 | http://snomed.info/sct | 241929008 | Acute allergic reaction (disorder) |
-| 24 | http://snomed.info/sct | 198992004 | Eclampsia in pregnancy (disorder) |
-| 23 | http://snomed.info/sct | 403191005 | Partial thickness burn (disorder) |
-| 21 | http://snomed.info/sct | 35999006 | Blighted ovum (disorder) |
-| 21 | http://snomed.info/sct | 33737001 | Fracture of rib (disorder) |
-| 21 | http://snomed.info/sct | 46177005 | End-stage renal disease (disorder) |
-| 20 | http://snomed.info/sct | 1255252008 | Resorption of alveolar process due to dental trauma (disorder) |
-| 20 | http://snomed.info/sct | 254837009 | Malignant neoplasm of breast (disorder) |
-| 19 | http://snomed.info/sct | 443165006 | Osteoporotic fracture of bone (disorder) |
-| 18 | http://snomed.info/sct | 267102003 | Sore throat (finding) |
-| 17 | http://snomed.info/sct | 192127007 | Child attention deficit disorder (disorder) |
-| 17 | http://snomed.info/sct | 401314000 | Acute non-ST segment elevation myocardial infarction (disorder) |
-| 17 | http://snomed.info/sct | 46752004 | Torus palatinus (disorder) |
-| 17 | http://snomed.info/sct | 32911000 | Homeless (finding) |
-| 16 | http://snomed.info/sct | 267036007 | Dyspnea (finding) |
-| 16 | http://snomed.info/sct | 56018004 | Wheezing (finding) |
-| 16 | http://snomed.info/sct | 367498001 | Seasonal allergic rhinitis (disorder) |
-| 16 | http://snomed.info/sct | 232353008 | Perennial allergic rhinitis with seasonal variation (disorder) |
-| 15 | http://snomed.info/sct | 185086009 | Chronic obstructive bronchitis (disorder) |
-| 14 | http://snomed.info/sct | 307731004 | Injury of tendon of the rotator cuff of shoulder (disorder) |
-| 14 | http://snomed.info/sct | 239872002 | Osteoarthritis of hip (disorder) |
-| 14 | http://snomed.info/sct | 43724002 | Chill (finding) |
-| 14 | http://snomed.info/sct | 126906006 | Neoplasm of prostate (disorder) |
-| 14 | http://snomed.info/sct | 92691004 | Carcinoma in situ of prostate (disorder) |
-| 13 | http://snomed.info/sct | 62564004 | Concussion with loss of consciousness (disorder) |
-| 13 | http://snomed.info/sct | 109838007 | Overlapping malignant neoplasm of colon (disorder) |
-| 13 | http://snomed.info/sct | 427419006 | Transformed migraine (disorder) |
-| 13 | http://snomed.info/sct | 233604007 | Pneumonia (disorder) |
-| 13 | http://snomed.info/sct | 85116003 | Miscarriage in second trimester (disorder) |
-| 12 | http://snomed.info/sct | 315268008 | Suspected prostate cancer (situation) |
-| 11 | http://snomed.info/sct | 30832001 | Rupture of patellar tendon (disorder) |
-| 11 | http://snomed.info/sct | 162573006 | Suspected lung cancer (situation) |
-| 11 | http://snomed.info/sct | 359817006 | Closed fracture of hip (disorder) |
-| 10 | http://snomed.info/sct | 876882001 | Died in hospice (finding) |
-| 10 | http://snomed.info/sct | 79586000 | Tubal pregnancy (disorder) |
-| 10 | http://snomed.info/sct | 76571007 | Septic shock (disorder) |
-| 9 | http://snomed.info/sct | 73430006 | Sleep apnea (disorder) |
-| 9 | http://snomed.info/sct | 60573004 | Aortic valve stenosis (disorder) |
-| 9 | http://snomed.info/sct | 1231000119100 | History of aortic valve replacement (situation) |
-| 9 | http://snomed.info/sct | 422587007 | Nausea (finding) |
-| 9 | http://snomed.info/sct | 249497008 | Vomiting symptom (finding) |
-| 9 | http://snomed.info/sct | 389087006 | Hypoxemia (disorder) |
-| 9 | http://snomed.info/sct | 271825005 | Respiratory distress (finding) |
-| 9 | http://snomed.info/sct | 127294003 | Traumatic or nontraumatic brain injury (disorder) |
-| 9 | http://snomed.info/sct | 68962001 | Muscle pain (finding) |
-| 9 | http://snomed.info/sct | 57676002 | Joint pain |
-| 9 | http://snomed.info/sct | 49436004 | Atrial fibrillation (disorder) |
-| 9 | http://snomed.info/sct | 74400008 | Appendicitis (disorder) |
-| 8 | http://snomed.info/sct | 263172003 | Fracture of mandible (disorder) |
-| 8 | http://snomed.info/sct | 56786000 | Pulmonic valve stenosis (disorder) |
-| 8 | http://snomed.info/sct | 267253006 | Fetus with chromosomal abnormality (disorder) |
-| 8 | http://snomed.info/sct | 239720000 | Tear of meniscus of knee (disorder) |
-| 8 | http://snomed.info/sct | 25064002 | Headache (finding) |
-| 8 | http://snomed.info/sct | 449868002 | Smokes tobacco daily (finding) |
-| 8 | http://snomed.info/sct | 230690007 | Cerebrovascular accident (disorder) |
-| 7 | http://snomed.info/sct | 5602001 | Opioid abuse |
-| 7 | http://snomed.info/sct | 363406005 | Malignant neoplasm of colon (disorder) |
-| 7 | http://snomed.info/sct | 230265002 | Familial Alzheimer's disease of early onset (disorder) |
-| 7 | http://snomed.info/sct | 67782005 | Acute respiratory distress syndrome (disorder) |
-| 7 | http://snomed.info/sct | 408512008 | Body mass index 40+ - severely obese (finding) |
-| 7 | http://snomed.info/sct | 254637007 | Non-small cell lung cancer (disorder) |
-| 7 | http://snomed.info/sct | 424132000 | Non-small cell carcinoma of lung, TNM stage 1 (disorder) |
-| 6 | http://snomed.info/sct | 90560007 | Gout |
-| 6 | http://snomed.info/sct | 283545005 | Gunshot wound (disorder) |
-| 6 | http://snomed.info/sct | 262574004 | Bullet wound (disorder) |
-| 6 | http://snomed.info/sct | 7200002 | Alcoholism (disorder) |
-| 6 | http://snomed.info/sct | 83664006 | Idiopathic atrophic hypothyroidism (disorder) |
-| 5 | http://snomed.info/sct | 48724000 | Mitral valve regurgitation (disorder) |
-| 5 | http://snomed.info/sct | 65710008 | Acute respiratory failure (disorder) |
-| 5 | http://snomed.info/sct | 444470001 | Injury of anterior cruciate ligament (disorder) |
-| 5 | http://snomed.info/sct | 60234000 | Aortic valve regurgitation (disorder) |
-| 5 | http://snomed.info/sct | 81629009 | Traumatic dislocation of temporomandibular joint (disorder) |
-| 5 | http://snomed.info/sct | 67787004 | Tongue tie (disorder) |
-| 5 | http://snomed.info/sct | 37849005 | Congenital uterine anomaly (disorder) |
-| 5 | http://snomed.info/sct | 706870000 | Acute pulmonary embolism (disorder) |
-| 4 | http://snomed.info/sct | 132281000119108 | Acute deep venous thrombosis (disorder) |
-| 4 | http://snomed.info/sct | 6072007 | Bleeding from anus (disorder) |
-| 4 | http://snomed.info/sct | 236077008 | Protracted diarrhea (finding) |
-| 4 | http://snomed.info/sct | 109989006 | Multiple myeloma (disorder) |
-| 4 | http://snomed.info/sct | 770349000 | Sepsis caused by virus (disorder) |
-| 4 | http://snomed.info/sct | 254632001 | Small cell carcinoma of lung (disorder) |
-| 4 | http://snomed.info/sct | 67811000119102 | Primary small cell malignant neoplasm of lung, TNM stage 1 (disorder) |
-| 4 | http://snomed.info/sct | 93761005 | Primary malignant neoplasm of colon (disorder) |
-| 4 | http://snomed.info/sct | 65275009 | Acute cholecystitis (disorder) |
-| 4 | http://snomed.info/sct | 235919008 | Gallbladder calculus (disorder) |
-| 4 | http://snomed.info/sct | 97331000119101 | Macular edema and retinopathy due to type 2 diabetes mellitus (disorder) |
-| 4 | http://snomed.info/sct | 27942005 | Shock (disorder) |
-| 3 | http://snomed.info/sct | 312157006 | Infectious mediastinitis (disorder) |
-| 3 | http://snomed.info/sct | 698303004 | Awaiting transplantation of bone marrow (situation) |
-| 3 | http://snomed.info/sct | 444448004 | Injury of medial collateral ligament of knee (disorder) |
-| 3 | http://snomed.info/sct | 267060006 | Diarrhea symptom (finding) |
-| 3 | http://snomed.info/sct | 213150003 | Kidney transplant failure and rejection (disorder) |
-| 3 | http://snomed.info/sct | 370143000 | Major depressive disorder (disorder) |
-| 2 | http://snomed.info/sct | 45816000 | Pyelonephritis (disorder) |
-| 2 | http://snomed.info/sct | 94260004 | Metastatic malignant neoplasm to colon (disorder) |
-| 2 | http://snomed.info/sct | 153351000119102 | History of peripheral stem cell transplant (situation) |
-| 2 | http://snomed.info/sct | 40275004 | Contact dermatitis (disorder) |
-| 2 | http://snomed.info/sct | 68235000 | Nasal congestion (finding) |
-| 2 | http://snomed.info/sct | 4557003 | Preinfarction syndrome (disorder) |
-| 2 | http://snomed.info/sct | 69896004 | Rheumatoid arthritis (disorder) |
-| 2 | http://snomed.info/sct | 47505003 | Posttraumatic stress disorder (disorder) |
-| 2 | http://snomed.info/sct | 161679004 | History of artificial joint (situation) |
-| 2 | http://snomed.info/sct | 108631000119101 | History of autologous bone marrow transplant (situation) |
-| 2 | http://snomed.info/sct | 262521009 | Traumatic injury of spinal cord and/or vertebral column (disorder) |
-| 1 | http://snomed.info/sct | 234466008 | Acquired coagulation disorder (disorder) |
-| 1 | http://snomed.info/sct | 84114007 | Heart failure (disorder) |
-| 1 | http://snomed.info/sct | 152621000119105 | History of allotransplantation of bone marrow (situation) |
-| 1 | http://snomed.info/sct | 128188000 | Cerebral palsy (disorder) |
-| 1 | http://snomed.info/sct | 221360009 | Spasticity (finding) |
-| 1 | http://snomed.info/sct | 110359009 | Intellectual disability (disorder) |
-| 1 | http://snomed.info/sct | 157265008 | Dislocation of hip joint (disorder) |
-| 1 | http://snomed.info/sct | 11625007 | Torus mandibularis (disorder) |
-| 1 | http://snomed.info/sct | 94503003 | Metastatic malignant neoplasm to prostate (disorder) |
-| 1 | http://snomed.info/sct | 1501000119109 | Proliferative diabetic retinopathy due to type II diabetes mellitus |
-| 1 | http://snomed.info/sct | 62479008 | Acquired immune deficiency syndrome (disorder) |
-| 1 | http://snomed.info/sct | 86406008 | Human immunodeficiency virus infection (disorder) |
-| 1 | http://snomed.info/sct | 1734006 | Fracture of vertebral column with spinal cord injury (disorder) |
-| 1 | http://snomed.info/sct | 47693006 | Rupture of appendix (disorder) |
-| 1 | http://snomed.info/sct | 204949001 | Renal dysplasia (disorder) |
-| 1 | http://snomed.info/sct | 93143009 | Leukemia, disease (disorder) |
-| 1 | http://snomed.info/sct | 111287006 | Tricuspid valve regurgitation (disorder) |
-| 1 | http://snomed.info/sct | 95417003 | Primary fibromyalgia syndrome (disorder) |
-| 1 | http://snomed.info/sct | 200936003 | Lupus erythematosus (disorder) |
-| 1 | http://snomed.info/sct | 403192003 | Full thickness burn (disorder) |
-| 1 | http://snomed.info/sct | 15724005 | Fracture of vertebral column without spinal cord injury (disorder) |
-
-### CarePlan (37 distinct codes)
-
-| Count | System | Code | Display |
-|---|---|---|---|
-| 4006 | http://hl7.org/fhir/us/core/CodeSystem/careplan-category | assess-plan | (no display) |
-| 603 | http://snomed.info/sct | 53950000 | Respiratory therapy (procedure) |
-| 511 | http://snomed.info/sct | 735985000 | Diabetes self management plan (record artifact) |
-| 306 | http://snomed.info/sct | 134435003 | Routine antenatal care (regime/therapy) |
-| 260 | http://snomed.info/sct | 443402002 | Lifestyle education regarding hypertension (procedure) |
-| 209 | http://snomed.info/sct | 384758001 | Self-care interventions (procedure) |
-| 208 | http://snomed.info/sct | 773513001 | Physiotherapy care plan (record artifact) |
-| 189 | http://snomed.info/sct | 736376001 | Infectious disease care plan (record artifact) |
-| 187 | http://snomed.info/sct | 385691007 | Fracture care (regime/therapy) |
-| 182 | http://snomed.info/sct | 408869004 | Musculoskeletal care (regime/therapy) |
-| 171 | http://snomed.info/sct | 734163000 | Care plan (record artifact) |
-| 166 | http://snomed.info/sct | 225358003 | Wound care (regime/therapy) |
-| 127 | http://snomed.info/sct | 736285004 | Hyperlipidemia clinical management plan (record artifact) |
-| 120 | http://snomed.info/sct | 276239002 | Therapy (regime/therapy) |
-| 78 | http://snomed.info/sct | 47387005 | Head injury rehabilitation (regime/therapy) |
-| 68 | http://snomed.info/sct | 736353004 | Inpatient care plan (record artifact) |
-| 68 | http://snomed.info/sct | 699728000 | Asthma self management (regime/therapy) |
-| 60 | http://snomed.info/sct | 133901003 | Burn care (regime/therapy) |
-| 55 | http://snomed.info/sct | 736690008 | Dialysis care plan (record artifact) |
-| 50 | http://snomed.info/sct | 736372004 | Discharge care plan (record artifact) |
-| 48 | http://snomed.info/sct | 170836005 | Allergic disorder monitoring (regime/therapy) |
-| 47 | http://snomed.info/sct | 718361005 | Weight management program (regime/therapy) |
-| 44 | http://snomed.info/sct | 736283006 | Chronic obstructive pulmonary disease clinical management plan (record artifact) |
-| 40 | http://snomed.info/sct | 736252007 | Cancer care plan (record artifact) |
-| 36 | http://snomed.info/sct | 386257007 | Dementia management (regime/therapy) |
-| 35 | http://snomed.info/sct | 711282006 | Skin condition care (regime/therapy) |
-| 34 | http://snomed.info/sct | 735984001 | Heart failure self management plan (record artifact) |
-| 28 | http://snomed.info/sct | 737471002 | Minor surgery care management (procedure) |
-| 22 | http://snomed.info/sct | 737567002 | Major surgery care management (procedure) |
-| 17 | http://snomed.info/sct | 386522008 | Overactivity/inattention behavior management (regime/therapy) |
-| 11 | http://snomed.info/sct | 182964004 | Terminal care (regime/therapy) |
-| 9 | http://snomed.info/sct | 736254008 | Psychiatry care plan (record artifact) |
-| 5 | http://snomed.info/sct | 735321000 | Surgical inpatient care plan (record artifact) |
-| 5 | http://snomed.info/sct | 208748005 | Open dislocation of jaw (disorder) |
-| 5 | http://snomed.info/sct | 718347000 | Mental health care plan (record artifact) |
-| 1 | http://snomed.info/sct | 781087000 | Medical care (regime/therapy) |
-| 1 | http://snomed.info/sct | 75162002 | Spinal cord injury rehabilitation (regime/therapy) |
 
 ### Procedure (355 distinct codes)
 
@@ -770,228 +405,6 @@ Every distinct `(system, code, display)` triple actually present, sorted by freq
 | 1 | http://snomed.info/sct | 183450002 | Admission to burn unit (procedure) |
 | 1 | http://snomed.info/sct | 305340004 | Admission to long stay hospital (procedure) |
 
-### MedicationRequest (190 distinct codes)
-
-| Count | System | Code | Display |
-|---|---|---|---|
-| 6320 | http://www.nlm.nih.gov/research/umls/rxnorm | 106892 | insulin isophane, human 70 UNT/ML / insulin, regular, human 30 UNT/ML Injectable Suspension [Humulin] |
-| 6235 | http://www.nlm.nih.gov/research/umls/rxnorm | 314076 | lisinopril 10 MG Oral Tablet |
-| 4843 | http://www.nlm.nih.gov/research/umls/rxnorm | 310798 | Hydrochlorothiazide 25 MG Oral Tablet |
-| 4116 | http://www.nlm.nih.gov/research/umls/rxnorm | 308136 | amLODIPine 2.5 MG Oral Tablet |
-| 3423 | http://www.nlm.nih.gov/research/umls/rxnorm | 860975 | 24 HR Metformin hydrochloride 500 MG Extended Release Oral Tablet |
-| 1155 | http://www.nlm.nih.gov/research/umls/rxnorm | 314231 | Simvastatin 10 MG Oral Tablet |
-| 1109 | http://www.nlm.nih.gov/research/umls/rxnorm | 1664463 | 24 HR tacrolimus 1 MG Extended Release Oral Tablet [Envarsus] |
-| 892 | http://www.nlm.nih.gov/research/umls/rxnorm | 904419 | Alendronic acid 10 MG Oral Tablet |
-| 838 | http://www.nlm.nih.gov/research/umls/rxnorm | 206905 | Ibuprofen 400 MG Oral Tablet [Ibu] |
-| 694 | http://www.nlm.nih.gov/research/umls/rxnorm | 209387 | Acetaminophen 325 MG Oral Tablet [Tylenol] |
-| 680 | http://www.nlm.nih.gov/research/umls/rxnorm | 856987 | Acetaminophen 300 MG / Hydrocodone Bitartrate 5 MG Oral Tablet |
-| 679 | http://www.nlm.nih.gov/research/umls/rxnorm | 245314 | albuterol 5 MG/ML Inhalation Solution |
-| 662 | http://www.nlm.nih.gov/research/umls/rxnorm | 896209 | 60 ACTUAT Fluticasone propionate 0.25 MG/ACTUAT / salmeterol 0.05 MG/ACTUAT Dry Powder Inhaler |
-| 612 | http://www.nlm.nih.gov/research/umls/rxnorm | 313782 | Acetaminophen 325 MG Oral Tablet |
-| 540 | http://www.nlm.nih.gov/research/umls/rxnorm | 630208 | albuterol 0.83 MG/ML Inhalation Solution |
-| 532 | http://www.nlm.nih.gov/research/umls/rxnorm | 1049625 | Acetaminophen 325 MG / Oxycodone Hydrochloride 10 MG Oral Tablet [Percocet] |
-| 495 | http://www.nlm.nih.gov/research/umls/rxnorm | 897685 | verapamil hydrochloride 80 MG Oral Tablet [Calan] |
-| 495 | http://www.nlm.nih.gov/research/umls/rxnorm | 855332 | Warfarin Sodium 5 MG Oral Tablet |
-| 495 | http://www.nlm.nih.gov/research/umls/rxnorm | 197604 | Digoxin 0.125 MG Oral Tablet |
-| 411 | http://www.nlm.nih.gov/research/umls/rxnorm | 895996 | 120 ACTUAT fluticasone propionate 0.044 MG/ACTUAT Metered Dose Inhaler [Flovent] |
-| 303 | http://www.nlm.nih.gov/research/umls/rxnorm | 835603 | tramadol hydrochloride 50 MG Oral Tablet |
-| 278 | http://www.nlm.nih.gov/research/umls/rxnorm | 849574 | Naproxen sodium 220 MG Oral Tablet |
-| 272 | http://www.nlm.nih.gov/research/umls/rxnorm | 351109 | budesonide 0.25 MG/ML Inhalation Suspension |
-| 269 | http://www.nlm.nih.gov/research/umls/rxnorm | 745752 | NDA021457 200 ACTUAT albuterol 0.09 MG/ACTUAT Metered Dose Inhaler [ProAir] |
-| 264 | http://www.nlm.nih.gov/research/umls/rxnorm | 562251 | Amoxicillin 250 MG / Clavulanate 125 MG Oral Tablet |
-| 212 | http://www.nlm.nih.gov/research/umls/rxnorm | 245134 | 72 HR Fentanyl 0.025 MG/HR Transdermal System |
-| 201 | http://www.nlm.nih.gov/research/umls/rxnorm | 313988 | Furosemide 40 MG Oral Tablet |
-| 199 | http://www.nlm.nih.gov/research/umls/rxnorm | 310965 | Ibuprofen 200 MG Oral Tablet |
-| 199 | http://www.nlm.nih.gov/research/umls/rxnorm | 705129 | Nitroglycerin 0.4 MG/ACTUAT Mucosal Spray |
-| 193 | http://www.nlm.nih.gov/research/umls/rxnorm | 866412 | 24 HR metoprolol succinate 100 MG Extended Release Oral Tablet |
-| 189 | http://www.nlm.nih.gov/research/umls/rxnorm | 1860491 | 12 HR Hydrocodone Bitartrate 10 MG Extended Release Oral Capsule |
-| 177 | http://www.nlm.nih.gov/research/umls/rxnorm | 309362 | Clopidogrel 75 MG Oral Tablet |
-| 174 | http://www.nlm.nih.gov/research/umls/rxnorm | 312961 | Simvastatin 20 MG Oral Tablet |
-| 174 | http://www.nlm.nih.gov/research/umls/rxnorm | 1049504 | Abuse-Deterrent 12 HR Oxycodone Hydrochloride 10 MG Extended Release Oral Tablet [Oxycontin] |
-| 158 | http://www.nlm.nih.gov/research/umls/rxnorm | 896001 | 120 ACTUAT fluticasone propionate 0.11 MG/ACTUAT Metered Dose Inhaler [Flovent] |
-| 155 | http://www.nlm.nih.gov/research/umls/rxnorm | 1043400 | Acetaminophen 21.7 MG/ML / Dextromethorphan Hydrobromide 1 MG/ML / doxylamine succinate 0.417 MG/ML Oral Solution |
-| 138 | http://www.nlm.nih.gov/research/umls/rxnorm | 349094 | budesonide 0.125 MG/ML Inhalation Suspension |
-| 134 | http://www.nlm.nih.gov/research/umls/rxnorm | 200033 | carvedilol 25 MG Oral Tablet |
-| 128 | http://www.nlm.nih.gov/research/umls/rxnorm | 993770 | Acetaminophen 300 MG / Codeine Phosphate 15 MG Oral Tablet |
-| 127 | http://www.nlm.nih.gov/research/umls/rxnorm | 1870230 | NDA020800 0.3 ML Epinephrine 1 MG/ML Auto-Injector |
-| 124 | http://www.nlm.nih.gov/research/umls/rxnorm | 757594 | {28 (norethindrone 0.35 MG Oral Tablet) } Pack [Jolivette 28 Day] |
-| 114 | http://www.nlm.nih.gov/research/umls/rxnorm | 314077 | lisinopril 20 MG Oral Tablet |
-| 113 | http://www.nlm.nih.gov/research/umls/rxnorm | 198405 | Ibuprofen 100 MG Oral Tablet |
-| 111 | http://www.nlm.nih.gov/research/umls/rxnorm | 859088 | NDA020983 200 ACTUAT albuterol 0.09 MG/ACTUAT Metered Dose Inhaler [Ventolin] |
-| 110 | http://www.nlm.nih.gov/research/umls/rxnorm | 748962 | {28 (norethindrone 0.35 MG Oral Tablet) } Pack [Camila 28 Day] |
-| 110 | http://www.nlm.nih.gov/research/umls/rxnorm | 979492 | losartan potassium 50 MG Oral Tablet |
-| 109 | http://www.nlm.nih.gov/research/umls/rxnorm | 313820 | Acetaminophen 160 MG Chewable Tablet |
-| 104 | http://www.nlm.nih.gov/research/umls/rxnorm | 351137 | albuterol 0.21 MG/ML Inhalation Solution |
-| 91 | http://www.nlm.nih.gov/research/umls/rxnorm | 616830 | budesonide 0.125 MG/ML Inhalation Suspension [Pulmicort] |
-| 87 | http://www.nlm.nih.gov/research/umls/rxnorm | 831533 | {28 (norethindrone 0.35 MG Oral Tablet) } Pack [Errin 28 Day] |
-| 86 | http://www.nlm.nih.gov/research/umls/rxnorm | 351266 | buprenorphine 2 MG / naloxone 0.5 MG Sublingual Tablet |
-| 84 | http://www.nlm.nih.gov/research/umls/rxnorm | 856987 | Acetaminophen 300 MG / HYDROcodone Bitartrate 5 MG Oral Tablet |
-| 83 | http://www.nlm.nih.gov/research/umls/rxnorm | 834102 | Penicillin V Potassium 500 MG Oral Tablet |
-| 81 | http://www.nlm.nih.gov/research/umls/rxnorm | 308192 | Amoxicillin 500 MG Oral Tablet |
-| 78 | http://www.nlm.nih.gov/research/umls/rxnorm | 751905 | {7 (ethinyl estradiol 0.035 MG / norgestimate 0.18 MG Oral Tablet) / 7 (ethinyl estradiol 0.035 MG / norgestimate 0.215 MG Oral Tablet) / 7 (ethinyl estradiol 0.035 MG / norgestimate 0.25 MG Oral Tablet) / 7 (inert ingredients 1 MG Oral Tablet) } Pack [Trinessa 28 Day] |
-| 77 | http://www.nlm.nih.gov/research/umls/rxnorm | 834061 | Penicillin V Potassium 250 MG Oral Tablet |
-| 71 | http://www.nlm.nih.gov/research/umls/rxnorm | 748856 | {24 (drospirenone 3 MG / ethinyl estradiol 0.02 MG Oral Tablet) / 4 (inert ingredients 1 MG Oral Tablet) } Pack [Yaz 28 Day] |
-| 68 | http://www.nlm.nih.gov/research/umls/rxnorm | 310325 | ferrous sulfate 325 MG Oral Tablet |
-| 67 | http://www.nlm.nih.gov/research/umls/rxnorm | 748879 | {21 (ethinyl estradiol 0.03 MG / levonorgestrel 0.15 MG Oral Tablet) / 7 (inert ingredients 1 MG Oral Tablet) } Pack [Levora 0.15/30 28 Day] |
-| 64 | http://www.nlm.nih.gov/research/umls/rxnorm | 1860154 | Abuse-Deterrent 12 HR Oxycodone Hydrochloride 15 MG Extended Release Oral Tablet |
-| 63 | http://www.nlm.nih.gov/research/umls/rxnorm | 1049221 | Acetaminophen 325 MG / Oxycodone Hydrochloride 5 MG Oral Tablet |
-| 60 | http://www.nlm.nih.gov/research/umls/rxnorm | 978950 | {5 (dienogest 2 MG / estradiol valerate 2 MG Oral Tablet) / 17 (dienogest 3 MG / estradiol valerate 2 MG Oral Tablet) / 2 (estradiol valerate 1 MG Oral Tablet) / 2 (estradiol valerate 3 MG Oral Tablet) / 2 (inert ingredients 1 MG Oral Tablet) } Pack [Natazia 28 Day] |
-| 58 | http://www.nlm.nih.gov/research/umls/rxnorm | 749762 | {7 (ethinyl estradiol 0.01 MG Oral Tablet) / 84 (ethinyl estradiol 0.03 MG / levonorgestrel 0.15 MG Oral Tablet) } Pack [Seasonique] |
-| 55 | http://www.nlm.nih.gov/research/umls/rxnorm | 861467 | Meperidine Hydrochloride 50 MG Oral Tablet |
-| 53 | http://www.nlm.nih.gov/research/umls/rxnorm | 351136 | albuterol 0.417 MG/ML Inhalation Solution |
-| 51 | http://www.nlm.nih.gov/research/umls/rxnorm | 2001499 | Vitamin B12 5 MG/ML Injectable Solution |
-| 48 | http://www.nlm.nih.gov/research/umls/rxnorm | 1367439 | 21 DAY ethinyl estradiol 0.000625 MG/HR / etonogestrel 0.005 MG/HR Vaginal System [NuvaRing] |
-| 45 | http://www.nlm.nih.gov/research/umls/rxnorm | 1431987 | 24 HR tacrolimus 5 MG Extended Release Oral Capsule [Astagraf] |
-| 44 | http://www.nlm.nih.gov/research/umls/rxnorm | 997488 | Fexofenadine hydrochloride 30 MG Oral Tablet |
-| 43 | http://www.nlm.nih.gov/research/umls/rxnorm | 665078 | Loratadine 5 MG Chewable Tablet |
-| 41 | http://www.nlm.nih.gov/research/umls/rxnorm | 106258 | Hydrocortisone 10 MG/ML Topical Cream |
-| 40 | http://www.nlm.nih.gov/research/umls/rxnorm | 2563431 | aspirin 81 MG Oral Capsule [Vazalore] |
-| 39 | http://www.nlm.nih.gov/research/umls/rxnorm | 1648755 | nitrofurantoin, macrocrystals 25 MG / nitrofurantoin, monohydrate 75 MG Oral Capsule |
-| 37 | http://www.nlm.nih.gov/research/umls/rxnorm | 243670 | aspirin 81 MG Oral Tablet |
-| 37 | http://www.nlm.nih.gov/research/umls/rxnorm | 1049221 | Acetaminophen 325 MG / oxyCODONE Hydrochloride 5 MG Oral Tablet |
-| 36 | http://www.nlm.nih.gov/research/umls/rxnorm | 308182 | Amoxicillin 250 MG Oral Capsule |
-| 35 | http://www.nlm.nih.gov/research/umls/rxnorm | 1049630 | diphenhydrAMINE Hydrochloride 25 MG Oral Tablet |
-| 33 | http://www.nlm.nih.gov/research/umls/rxnorm | 309097 | Cefuroxime 250 MG Oral Tablet |
-| 31 | http://www.nlm.nih.gov/research/umls/rxnorm | 309309 | ciprofloxacin 500 MG Oral Tablet |
-| 30 | http://www.nlm.nih.gov/research/umls/rxnorm | 857005 | Acetaminophen 325 MG / HYDROcodone Bitartrate 7.5 MG Oral Tablet |
-| 29 | http://www.nlm.nih.gov/research/umls/rxnorm | 1534809 | 168 HR Ethinyl Estradiol 0.00146 MG/HR / norelgestromin 0.00625 MG/HR Transdermal System |
-| 28 | http://www.nlm.nih.gov/research/umls/rxnorm | 855812 | prasugrel 10 MG Oral Tablet |
-| 27 | http://www.nlm.nih.gov/research/umls/rxnorm | 197511 | ciprofloxacin 250 MG Oral Tablet |
-| 26 | http://www.nlm.nih.gov/research/umls/rxnorm | 310436 | Galantamine 4 MG Oral Tablet |
-| 23 | http://www.nlm.nih.gov/research/umls/rxnorm | 979485 | losartan potassium 25 MG Oral Tablet |
-| 22 | http://www.nlm.nih.gov/research/umls/rxnorm | 197454 | cephalexin 500 MG Oral Tablet |
-| 20 | http://www.nlm.nih.gov/research/umls/rxnorm | 204892 | clonazePAM 0.25 MG Oral Tablet |
-| 20 | http://www.nlm.nih.gov/research/umls/rxnorm | 308971 | carbamazepine 20 MG/ML Oral Suspension [Tegretol] |
-| 19 | http://www.nlm.nih.gov/research/umls/rxnorm | 477045 | Chlorpheniramine Maleate 2 MG/ML Oral Solution |
-| 19 | http://www.nlm.nih.gov/research/umls/rxnorm | 235389 | Mestranol / Norethynodrel |
-| 17 | http://www.nlm.nih.gov/research/umls/rxnorm | 1536144 | 120 ACTUAT mometasone furoate 0.1 MG/ACTUAT Metered Dose Inhaler [Asmanex] |
-| 17 | http://www.nlm.nih.gov/research/umls/rxnorm | 1656356 | sacubitril 97 MG / valsartan 103 MG Oral Tablet [Entresto] |
-| 16 | http://www.nlm.nih.gov/research/umls/rxnorm | 1804799 | Alteplase 100 MG Injection |
-| 15 | http://www.nlm.nih.gov/research/umls/rxnorm | 1649987 | doxycycline hyclate 100 MG |
-| 15 | http://www.nlm.nih.gov/research/umls/rxnorm | 241834 | cycloSPORINE, modified 100 MG Oral Capsule |
-| 15 | http://www.nlm.nih.gov/research/umls/rxnorm | 198335 | sulfamethoxazole 800 MG / trimethoprim 160 MG Oral Tablet |
-| 14 | http://www.nlm.nih.gov/research/umls/rxnorm | 243670 | Aspirin 81 MG Oral Tablet |
-| 14 | http://www.nlm.nih.gov/research/umls/rxnorm | 1599803 | 24 HR Donepezil hydrochloride 10 MG / Memantine hydrochloride 28 MG Extended Release Oral Capsule |
-| 13 | http://www.nlm.nih.gov/research/umls/rxnorm | 197591 | Diazepam 5 MG Oral Tablet |
-| 13 | http://www.nlm.nih.gov/research/umls/rxnorm | 1014676 | cetirizine hydrochloride 5 MG Oral Tablet |
-| 13 | http://www.nlm.nih.gov/research/umls/rxnorm | 197378 | Astemizole 10 MG Oral Tablet |
-| 13 | http://www.nlm.nih.gov/research/umls/rxnorm | 284988 | didanosine 400 MG Delayed Release Oral Capsule |
-| 12 | http://www.nlm.nih.gov/research/umls/rxnorm | 749882 | {7 (inert ingredients 1 MG Oral Tablet) / 21 (mestranol 0.05 MG / norethindrone 1 MG Oral Tablet) } Pack [Norinyl 1+50 28 Day] |
-| 11 | http://www.nlm.nih.gov/research/umls/rxnorm | 617296 | amoxicillin 500 MG / clavulanate 125 MG Oral Tablet |
-| 9 | http://www.nlm.nih.gov/research/umls/rxnorm | 617311 | atorvastatin 40 MG Oral Tablet |
-| 8 | http://www.nlm.nih.gov/research/umls/rxnorm | 855332 | warfarin sodium 5 MG Oral Tablet |
-| 8 | http://www.nlm.nih.gov/research/umls/rxnorm | 198014 | Naproxen 500 MG Oral Tablet |
-| 8 | http://www.nlm.nih.gov/research/umls/rxnorm | 749785 | {7 (ethinyl estradiol 0.035 MG / norgestimate 0.18 MG Oral Tablet) / 7 (ethinyl estradiol 0.035 MG / norgestimate 0.215 MG Oral Tablet) / 7 (ethinyl estradiol 0.035 MG / norgestimate 0.25 MG Oral Tablet) / 7 (inert ingredients 1 MG Oral Tablet) } Pack [Ortho Tri-Cyclen 28 Day] |
-| 8 | http://www.nlm.nih.gov/research/umls/rxnorm | 198031 | 24 HR nicotine 0.292 MG/HR Transdermal System |
-| 7 | http://www.nlm.nih.gov/research/umls/rxnorm | 312938 | Sertraline 100 MG Oral Tablet |
-| 7 | http://www.nlm.nih.gov/research/umls/rxnorm | 896006 | 120 ACTUAT fluticasone propionate 0.22 MG/ACTUAT Metered Dose Inhaler [Flovent] |
-| 7 | http://www.nlm.nih.gov/research/umls/rxnorm | 313110 | stavudine 40 MG Oral Capsule |
-| 7 | http://www.nlm.nih.gov/research/umls/rxnorm | 310988 | indinavir 400 MG Oral Capsule |
-| 6 | http://www.nlm.nih.gov/research/umls/rxnorm | 866924 | metoprolol tartrate 25 MG Oral Tablet |
-| 6 | http://www.nlm.nih.gov/research/umls/rxnorm | 1648756 | nitrofurantoin, macrocrystals 25 MG / nitrofurantoin, monohydrate 75 MG [Macrobid] |
-| 6 | http://www.nlm.nih.gov/research/umls/rxnorm | 197319 | Allopurinol 100 MG Oral Tablet |
-| 6 | http://www.nlm.nih.gov/research/umls/rxnorm | 966222 | Levothyroxine Sodium 0.075 MG Oral Tablet |
-| 6 | http://www.nlm.nih.gov/research/umls/rxnorm | 312615 | predniSONE 20 MG Oral Tablet |
-| 6 | http://www.nlm.nih.gov/research/umls/rxnorm | 476556 | emtricitabine 200 MG / tenofovir disoproxil fumarate 300 MG Oral Tablet |
-| 5 | http://www.nlm.nih.gov/research/umls/rxnorm | 1091392 | Methylphenidate Hydrochloride 20 MG Oral Tablet |
-| 5 | http://www.nlm.nih.gov/research/umls/rxnorm | 979480 | losartan potassium 100 MG Oral Tablet |
-| 5 | http://www.nlm.nih.gov/research/umls/rxnorm | 311372 | Loratadine 10 MG Oral Tablet |
-| 5 | http://www.nlm.nih.gov/research/umls/rxnorm | 1359133 | {5 (ethinyl estradiol 0.02 MG / norethindrone acetate 1 MG Oral Tablet) / 7 (ethinyl estradiol 0.03 MG / norethindrone acetate 1 MG Oral Tablet) / 9 (ethinyl estradiol 0.035 MG / norethindrone acetate 1 MG Oral Tablet) / 7 (ferrous fumarate 75 MG Oral Tablet) } Pack [Estrostep Fe 28 Day] |
-| 5 | http://www.nlm.nih.gov/research/umls/rxnorm | 617312 | atorvastatin 10 MG Oral Tablet |
-| 4 | http://www.nlm.nih.gov/research/umls/rxnorm | 313185 | Tacrine 10 MG Oral Capsule |
-| 4 | http://www.nlm.nih.gov/research/umls/rxnorm | 608139 | atomoxetine 100 MG Oral Capsule |
-| 4 | http://www.nlm.nih.gov/research/umls/rxnorm | 1100184 | Donepezil hydrochloride 23 MG Oral Tablet |
-| 4 | http://www.nlm.nih.gov/research/umls/rxnorm | 562508 | amoxicillin 875 MG / clavulanate 125 MG Oral Tablet |
-| 4 | http://www.nlm.nih.gov/research/umls/rxnorm | 197884 | lisinopril 40 MG Oral Tablet |
-| 4 | http://www.nlm.nih.gov/research/umls/rxnorm | 856980 | acetaminophen 300 MG / hydrocodone bitartrate 10 MG Oral Tablet |
-| 4 | http://www.nlm.nih.gov/research/umls/rxnorm | 141918 | Terfenadine 60 MG Oral Tablet |
-| 4 | http://www.nlm.nih.gov/research/umls/rxnorm | 259255 | atorvastatin 80 MG Oral Tablet |
-| 4 | http://www.nlm.nih.gov/research/umls/rxnorm | 313002 | Sodium Chloride 9 MG/ML Injectable Solution |
-| 4 | http://www.nlm.nih.gov/research/umls/rxnorm | 199663 | zidovudine 300 MG Oral Tablet |
-| 4 | http://www.nlm.nih.gov/research/umls/rxnorm | 349477 | efavirenz 600 MG Oral Tablet |
-| 3 | http://www.nlm.nih.gov/research/umls/rxnorm | 284215 | clindamycin 300 MG Oral Capsule |
-| 3 | http://www.nlm.nih.gov/research/umls/rxnorm | 686924 | carvedilol 3.125 MG Oral Tablet |
-| 3 | http://www.nlm.nih.gov/research/umls/rxnorm | 904467 | pravastatin sodium 20 MG Oral Tablet |
-| 3 | http://www.nlm.nih.gov/research/umls/rxnorm | 996740 | Memantine hydrochloride 2 MG/ML Oral Solution |
-| 3 | http://www.nlm.nih.gov/research/umls/rxnorm | 1014678 | cetirizine hydrochloride 10 MG Oral Tablet |
-| 2 | http://www.nlm.nih.gov/research/umls/rxnorm | 997501 | Fexofenadine hydrochloride 60 MG Oral Tablet |
-| 2 | http://www.nlm.nih.gov/research/umls/rxnorm | 617310 | atorvastatin 20 MG Oral Tablet |
-| 2 | http://www.nlm.nih.gov/research/umls/rxnorm | 197380 | atenolol 25 MG Oral Tablet |
-| 2 | http://www.nlm.nih.gov/research/umls/rxnorm | 979464 | hydrochlorothiazide 12.5 MG / losartan potassium 100 MG Oral Tablet |
-| 2 | http://www.nlm.nih.gov/research/umls/rxnorm | 313760 | zalcitabine 0.75 MG Oral Tablet |
-| 2 | http://www.nlm.nih.gov/research/umls/rxnorm | 200031 | carvedilol 6.25 MG Oral Tablet |
-| 2 | http://www.nlm.nih.gov/research/umls/rxnorm | 314231 | simvastatin 10 MG Oral Tablet |
-| 2 | http://www.nlm.nih.gov/research/umls/rxnorm | 310385 | FLUoxetine 20 MG Oral Capsule |
-| 2 | http://www.nlm.nih.gov/research/umls/rxnorm | 664741 | atazanavir 300 MG Oral Capsule |
-| 2 | http://www.nlm.nih.gov/research/umls/rxnorm | 317150 | ritonavir 100 MG Oral Capsule |
-| 2 | http://www.nlm.nih.gov/research/umls/rxnorm | 866427 | 24 HR metoprolol succinate 25 MG Extended Release Oral Tablet |
-| 2 | http://www.nlm.nih.gov/research/umls/rxnorm | 866436 | 24 HR metoprolol succinate 50 MG Extended Release Oral Tablet |
-| 2 | http://www.nlm.nih.gov/research/umls/rxnorm | 198211 | simvastatin 40 MG Oral Tablet |
-| 2 | http://www.nlm.nih.gov/research/umls/rxnorm | 979468 | hydrochlorothiazide 12.5 MG / losartan potassium 50 MG Oral Tablet |
-| 2 | http://www.nlm.nih.gov/research/umls/rxnorm | 105078 | Penicillin G 375 MG/ML Injectable Solution |
-| 2 | http://www.nlm.nih.gov/research/umls/rxnorm | 483438 | pregabalin 100 MG Oral Capsule |
-| 2 | http://www.nlm.nih.gov/research/umls/rxnorm | 997223 | Donepezil hydrochloride 10 MG Oral Tablet |
-| 1 | http://www.nlm.nih.gov/research/umls/rxnorm | 205326 | lisinopril 30 MG Oral Tablet |
-| 1 | http://www.nlm.nih.gov/research/umls/rxnorm | 476350 | ezetimibe 10 MG / simvastatin 40 MG Oral Tablet |
-| 1 | http://www.nlm.nih.gov/research/umls/rxnorm | 859751 | rosuvastatin calcium 20 MG Oral Tablet |
-| 1 | http://www.nlm.nih.gov/research/umls/rxnorm | 751623 | nebivolol 5 MG Oral Tablet [Bystolic] |
-| 1 | http://www.nlm.nih.gov/research/umls/rxnorm | 854905 | bisoprolol fumarate 5 MG Oral Tablet |
-| 1 | http://www.nlm.nih.gov/research/umls/rxnorm | 200096 | irbesartan 300 MG Oral Tablet |
-| 1 | http://www.nlm.nih.gov/research/umls/rxnorm | 197541 | Colchicine 0.6 MG Oral Tablet |
-| 1 | http://www.nlm.nih.gov/research/umls/rxnorm | 859749 | rosuvastatin calcium 10 MG Oral Tablet [Crestor] |
-| 1 | http://www.nlm.nih.gov/research/umls/rxnorm | 859424 | rosuvastatin calcium 5 MG Oral Tablet |
-| 1 | http://www.nlm.nih.gov/research/umls/rxnorm | 854916 | bisoprolol fumarate 2.5 MG / hydrochlorothiazide 6.25 MG Oral Tablet |
-| 1 | http://www.nlm.nih.gov/research/umls/rxnorm | 898723 | benazepril hydrochloride 5 MG Oral Tablet |
-| 1 | http://www.nlm.nih.gov/research/umls/rxnorm | 866511 | metoprolol tartrate 100 MG Oral Tablet |
-| 1 | http://www.nlm.nih.gov/research/umls/rxnorm | 854901 | bisoprolol fumarate 10 MG Oral Tablet |
-| 1 | http://www.nlm.nih.gov/research/umls/rxnorm | 197904 | lovastatin 20 MG Oral Tablet |
-| 1 | http://www.nlm.nih.gov/research/umls/rxnorm | 898687 | benazepril hydrochloride 10 MG Oral Tablet |
-| 1 | http://www.nlm.nih.gov/research/umls/rxnorm | 866514 | metoprolol tartrate 50 MG Oral Tablet |
-| 1 | http://www.nlm.nih.gov/research/umls/rxnorm | 789980 | Ampicillin 100 MG/ML Injectable Solution |
-| 1 | http://www.nlm.nih.gov/research/umls/rxnorm | 1363309 | Chlorpheniramine Maleate 4 MG Oral Tablet |
-| 1 | http://www.nlm.nih.gov/research/umls/rxnorm | 856457 | propranolol hydrochloride 20 MG Oral Tablet |
-| 1 | http://www.nlm.nih.gov/research/umls/rxnorm | 312961 | simvastatin 20 MG Oral Tablet |
-| 1 | http://www.nlm.nih.gov/research/umls/rxnorm | 311354 | lisinopril 5 MG Oral Tablet |
-| 1 | http://www.nlm.nih.gov/research/umls/rxnorm | 349199 | valsartan 80 MG Oral Tablet |
-| 1 | http://www.nlm.nih.gov/research/umls/rxnorm | 856519 | propranolol hydrochloride 40 MG Oral Tablet |
-| 1 | http://www.nlm.nih.gov/research/umls/rxnorm | 856448 | propranolol hydrochloride 10 MG Oral Tablet |
-| 1 | http://www.nlm.nih.gov/research/umls/rxnorm | 904458 | pravastatin sodium 10 MG Oral Tablet |
-| 1 | http://www.nlm.nih.gov/research/umls/rxnorm | 141962 | Azithromycin 250 MG Oral Capsule |
-| 1 | http://www.nlm.nih.gov/research/umls/rxnorm | 904481 | pravastatin sodium 80 MG Oral Tablet |
-| 1 | http://www.nlm.nih.gov/research/umls/rxnorm | 197905 | lovastatin 40 MG Oral Tablet |
-| 1 | http://www.nlm.nih.gov/research/umls/rxnorm | 808917 | fosfomycin 3000 MG Granules for Oral Solution |
-| 1 | http://www.nlm.nih.gov/research/umls/rxnorm | 105585 | Methotrexate 2.5 MG Oral Tablet |
-| 1 | http://www.nlm.nih.gov/research/umls/rxnorm | 833135 | Milnacipran hydrochloride 100 MG Oral Tablet |
-| 1 | http://www.nlm.nih.gov/research/umls/rxnorm | 904475 | pravastatin sodium 40 MG Oral Tablet |
-| 1 | http://www.nlm.nih.gov/research/umls/rxnorm | 200345 | simvastatin 80 MG Oral Tablet |
-
-### AllergyIntolerance (22 distinct codes)
-
-| Count | System | Code | Display |
-|---|---|---|---|
-| 208 | http://snomed.info/sct | 609328004 | Allergic disposition (finding) |
-| 120 | http://snomed.info/sct | 84489001 | Mold (organism) |
-| 113 | http://snomed.info/sct | 264287008 | Animal dander (substance) |
-| 92 | http://snomed.info/sct | 260147004 | House dust mite (organism) |
-| 91 | http://snomed.info/sct | 782576004 | Tree pollen (substance) |
-| 87 | http://snomed.info/sct | 256277009 | Grass pollen (substance) |
-| 48 | http://snomed.info/sct | 735029006 | Shellfish (substance) |
-| 46 | http://www.nlm.nih.gov/research/umls/rxnorm | 1191 | Aspirin |
-| 42 | http://snomed.info/sct | 762952008 | Peanut (substance) |
-| 37 | http://snomed.info/sct | 102263004 | Eggs (edible) (substance) |
-| 37 | http://snomed.info/sct | 111088007 | Latex (substance) |
-| 36 | http://snomed.info/sct | 288328004 | Bee venom (substance) |
-| 31 | http://snomed.info/sct | 735971005 | Fish (substance) |
-| 30 | http://snomed.info/sct | 412071004 | Wheat (substance) |
-| 28 | http://www.nlm.nih.gov/research/umls/rxnorm | 29046 | Lisinopril |
-| 26 | http://www.nlm.nih.gov/research/umls/rxnorm | 7984 | Penicillin V |
-| 26 | http://snomed.info/sct | 3718001 | Cow's milk (substance) |
-| 23 | http://snomed.info/sct | 442571000124108 | Tree nut (substance) |
-| 15 | http://snomed.info/sct | 256355007 | Glycine max (substance) |
-| 11 | http://www.nlm.nih.gov/research/umls/rxnorm | 10831 | Sulfamethoxazole / Trimethoprim |
-| 2 | http://www.nlm.nih.gov/research/umls/rxnorm | 5640 | Ibuprofen |
-| 1 | http://www.nlm.nih.gov/research/umls/rxnorm | 25037 | cefdinir |
-
 ### DiagnosticReport (37 distinct codes)
 
 | Count | System | Code | Display |
@@ -1059,6 +472,358 @@ Every distinct `(system, code, display)` triple actually present, sorted by freq
 | 125 | http://hl7.org/fhir/sid/cvx | 115 | Tdap |
 | 125 | http://hl7.org/fhir/sid/cvx | 33 | pneumococcal polysaccharide vaccine, 23 valent |
 | 48 | http://hl7.org/fhir/sid/cvx | 212 | COVID-19 vaccine, vector-nr, rS-Ad26, PF, 0.5 mL |
+
+### AllergyIntolerance (22 distinct codes)
+
+| Count | System | Code | Display |
+|---|---|---|---|
+| 208 | http://snomed.info/sct | 609328004 | Allergic disposition (finding) |
+| 120 | http://snomed.info/sct | 84489001 | Mold (organism) |
+| 113 | http://snomed.info/sct | 264287008 | Animal dander (substance) |
+| 92 | http://snomed.info/sct | 260147004 | House dust mite (organism) |
+| 91 | http://snomed.info/sct | 782576004 | Tree pollen (substance) |
+| 87 | http://snomed.info/sct | 256277009 | Grass pollen (substance) |
+| 48 | http://snomed.info/sct | 735029006 | Shellfish (substance) |
+| 46 | http://www.nlm.nih.gov/research/umls/rxnorm | 1191 | Aspirin |
+| 42 | http://snomed.info/sct | 762952008 | Peanut (substance) |
+| 37 | http://snomed.info/sct | 102263004 | Eggs (edible) (substance) |
+| 37 | http://snomed.info/sct | 111088007 | Latex (substance) |
+| 36 | http://snomed.info/sct | 288328004 | Bee venom (substance) |
+| 31 | http://snomed.info/sct | 735971005 | Fish (substance) |
+| 30 | http://snomed.info/sct | 412071004 | Wheat (substance) |
+| 28 | http://www.nlm.nih.gov/research/umls/rxnorm | 29046 | Lisinopril |
+| 26 | http://www.nlm.nih.gov/research/umls/rxnorm | 7984 | Penicillin V |
+| 26 | http://snomed.info/sct | 3718001 | Cow's milk (substance) |
+| 23 | http://snomed.info/sct | 442571000124108 | Tree nut (substance) |
+| 15 | http://snomed.info/sct | 256355007 | Glycine max (substance) |
+| 11 | http://www.nlm.nih.gov/research/umls/rxnorm | 10831 | Sulfamethoxazole / Trimethoprim |
+| 2 | http://www.nlm.nih.gov/research/umls/rxnorm | 5640 | Ibuprofen |
+| 1 | http://www.nlm.nih.gov/research/umls/rxnorm | 25037 | cefdinir |
+
+### Condition (257 distinct codes)
+
+| Count | System | Code | Display |
+|---|---|---|---|
+| 9180 | http://snomed.info/sct | 314529007 | Medication review due (situation) |
+| 3622 | http://snomed.info/sct | 73595000 | Stress (finding) |
+| 3360 | http://snomed.info/sct | 66383009 | Gingivitis (disorder) |
+| 3337 | http://snomed.info/sct | 160903007 | Full-time employment (finding) |
+| 2010 | http://snomed.info/sct | 160904001 | Part-time employment (finding) |
+| 1353 | http://snomed.info/sct | 422650009 | Social isolation (finding) |
+| 1259 | http://snomed.info/sct | 423315002 | Limited social contact (finding) |
+| 1239 | http://snomed.info/sct | 444814009 | Viral sinusitis (disorder) |
+| 1174 | http://snomed.info/sct | 741062008 | Not in labor force (finding) |
+| 1021 | http://snomed.info/sct | 18718003 | Gingival disease (disorder) |
+| 869 | http://snomed.info/sct | 706893006 | Victim of intimate partner abuse (finding) |
+| 750 | http://snomed.info/sct | 109570002 | Primary dental caries (disorder) |
+| 690 | http://snomed.info/sct | 424393004 | Reports of violence in the environment (finding) |
+| 650 | http://snomed.info/sct | 195662009 | Acute viral pharyngitis (disorder) |
+| 596 | http://snomed.info/sct | 162864005 | Body mass index 30+ - obesity (finding) |
+| 580 | http://snomed.info/sct | 73438004 | Unemployed (finding) |
+| 567 | http://snomed.info/sct | 10509002 | Acute bronchitis (disorder) |
+| 520 | http://snomed.info/sct | 224299000 | Received higher education (finding) |
+| 475 | http://snomed.info/sct | 714628002 | Prediabetes (finding) |
+| 453 | http://snomed.info/sct | 72892002 | Normal pregnancy (finding) |
+| 451 | http://snomed.info/sct | 271737000 | Anemia (disorder) |
+| 296 | http://snomed.info/sct | 160968000 | Risk activity involvement (finding) |
+| 287 | http://snomed.info/sct | 82423001 | Chronic pain (finding) |
+| 272 | http://snomed.info/sct | 473461003 | Educated to high school level (finding) |
+| 270 | http://snomed.info/sct | 266948004 | Has a criminal record (finding) |
+| 262 | http://snomed.info/sct | 40055000 | Chronic sinusitis (disorder) |
+| 260 | http://snomed.info/sct | 59621000 | Essential hypertension (disorder) |
+| 231 | http://snomed.info/sct | 1149222004 | Overdose (disorder) |
+| 215 | http://snomed.info/sct | 427898007 | Infection of tooth (disorder) |
+| 212 | http://snomed.info/sct | 161744009 | Past pregnancy history of miscarriage (situation) |
+| 203 | http://snomed.info/sct | 414545008 | Ischemic heart disease (disorder) |
+| 203 | http://snomed.info/sct | 274531002 | Abnormal findings diagnostic imaging heart+coronary circulat (finding) |
+| 201 | http://snomed.info/sct | 237602007 | Metabolic syndrome X (disorder) |
+| 201 | http://snomed.info/sct | 278860009 | Chronic low back pain (finding) |
+| 188 | http://snomed.info/sct | 10939881000119105 | Unhealthy alcohol drinking behavior (finding) |
+| 179 | http://snomed.info/sct | 125605004 | Fracture of bone (disorder) |
+| 176 | http://snomed.info/sct | 278588009 | Fractured dental filling (finding) |
+| 172 | http://snomed.info/sct | 43878008 | Streptococcal sore throat (disorder) |
+| 170 | http://snomed.info/sct | 278598003 | Leaking dental filling (finding) |
+| 167 | http://snomed.info/sct | 384709000 | Sprain (morphologic abnormality) |
+| 163 | http://snomed.info/sct | 312608009 | Laceration - injury (disorder) |
+| 163 | http://snomed.info/sct | 278558000 | Dental filling lost (finding) |
+| 158 | http://snomed.info/sct | 224295006 | Only received primary school education (finding) |
+| 155 | http://snomed.info/sct | 65363002 | Otitis media (disorder) |
+| 152 | http://snomed.info/sct | 80583007 | Severe anxiety (panic) (finding) |
+| 151 | http://snomed.info/sct | 37320007 | Loss of teeth (disorder) |
+| 150 | http://snomed.info/sct | 278602001 | Loose dental filling (finding) |
+| 134 | http://snomed.info/sct | 127013003 | Disorder of kidney due to diabetes mellitus (disorder) |
+| 133 | http://snomed.info/sct | 307426000 | Acute infective cystitis (disorder) |
+| 128 | http://snomed.info/sct | 55822004 | Hyperlipidemia (disorder) |
+| 126 | http://snomed.info/sct | 431855005 | Chronic kidney disease stage 1 (disorder) |
+| 125 | http://snomed.info/sct | 105531004 | Housing unsatisfactory (finding) |
+| 123 | http://snomed.info/sct | 267020005 | History of tubal ligation (situation) |
+| 122 | http://snomed.info/sct | 1121000119107 | Chronic neck pain (finding) |
+| 118 | http://snomed.info/sct | 446654005 | Refugee (person) |
+| 117 | http://snomed.info/sct | 68496003 | Polyp of colon (disorder) |
+| 112 | http://snomed.info/sct | 44465007 | Sprain of ankle (disorder) |
+| 110 | http://snomed.info/sct | 302870006 | Hypertriglyceridemia (disorder) |
+| 109 | http://snomed.info/sct | 44054006 | Diabetes mellitus type 2 (disorder) |
+| 107 | http://snomed.info/sct | 90781000119102 | Microalbuminuria due to type 2 diabetes mellitus (disorder) |
+| 101 | http://snomed.info/sct | 431856006 | Chronic kidney disease stage 2 (disorder) |
+| 101 | http://snomed.info/sct | 840544004 | Suspected disease caused by Severe acute respiratory coronavirus 2 (situation) |
+| 95 | http://snomed.info/sct | 840539006 | Disease caused by severe acute respiratory syndrome coronavirus 2 (disorder) |
+| 91 | http://snomed.info/sct | 386661006 | Fever (finding) |
+| 90 | http://snomed.info/sct | 399261000 | History of coronary artery bypass grafting (situation) |
+| 90 | http://snomed.info/sct | 361055000 | Misuses drugs (finding) |
+| 79 | http://snomed.info/sct | 110030002 | Concussion injury of brain (disorder) |
+| 78 | http://snomed.info/sct | 124171000119105 | Chronic intractable migraine without aura (disorder) |
+| 76 | http://snomed.info/sct | 157141000119108 | Proteinuria due to type 2 diabetes mellitus (disorder) |
+| 75 | http://snomed.info/sct | 6525002 | Dependent drug abuse (disorder) |
+| 74 | http://snomed.info/sct | 196416002 | Impacted molars (disorder) |
+| 72 | http://snomed.info/sct | 19169002 | Miscarriage in first trimester (disorder) |
+| 70 | http://snomed.info/sct | 49727002 | Cough (finding) |
+| 69 | http://snomed.info/sct | 239873007 | Osteoarthritis of knee (disorder) |
+| 69 | http://snomed.info/sct | 433144002 | Chronic kidney disease stage 3 (disorder) |
+| 66 | http://snomed.info/sct | 75498004 | Acute bacterial sinusitis (disorder) |
+| 62 | http://snomed.info/sct | 36971009 | Sinusitis (disorder) |
+| 61 | http://snomed.info/sct | 80394007 | Hyperglycemia (disorder) |
+| 61 | http://snomed.info/sct | 62106007 | Concussion with no loss of consciousness (disorder) |
+| 61 | http://snomed.info/sct | 48333001 | Burn injury (morphologic abnormality) |
+| 60 | http://snomed.info/sct | 90460009 | Injury of neck (disorder) |
+| 60 | http://snomed.info/sct | 39848009 | Whiplash injury to neck (disorder) |
+| 59 | http://snomed.info/sct | 128613002 | Seizure disorder (disorder) |
+| 59 | http://snomed.info/sct | 1290882004 | History of seizure (situation) |
+| 55 | http://snomed.info/sct | 70704007 | Sprain of wrist (disorder) |
+| 53 | http://snomed.info/sct | 39898005 | Sleep disorder (disorder) |
+| 53 | http://snomed.info/sct | 428251008 | History of appendectomy (situation) |
+| 52 | http://snomed.info/sct | 64859006 | Osteoporosis (disorder) |
+| 52 | http://snomed.info/sct | 36955009 | Loss of taste (finding) |
+| 52 | http://snomed.info/sct | 266934004 | Transport problem (finding) |
+| 51 | http://snomed.info/sct | 713458007 | Lack of access to transportation (finding) |
+| 49 | http://snomed.info/sct | 197927001 | Recurrent urinary tract infection (disorder) |
+| 47 | http://snomed.info/sct | 61804006 | Alveolitis of jaw (disorder) |
+| 46 | http://snomed.info/sct | 195967001 | Asthma (disorder) |
+| 45 | http://snomed.info/sct | 698306007 | Awaiting transplantation of kidney (situation) |
+| 44 | http://snomed.info/sct | 399211009 | History of myocardial infarction (situation) |
+| 44 | http://snomed.info/sct | 78275009 | Obstructive sleep apnea syndrome (disorder) |
+| 43 | http://snomed.info/sct | 65966004 | Fracture of forearm (disorder) |
+| 43 | http://snomed.info/sct | 84229001 | Fatigue (finding) |
+| 42 | http://snomed.info/sct | 431857002 | Chronic kidney disease stage 4 (disorder) |
+| 41 | http://snomed.info/sct | 161665007 | History of renal transplant (situation) |
+| 41 | http://snomed.info/sct | 156073000 | Complete miscarriage (disorder) |
+| 38 | http://snomed.info/sct | 283385000 | Laceration of thigh (disorder) |
+| 38 | http://snomed.info/sct | 1551000119108 | Nonproliferative diabetic retinopathy due to type II diabetes mellitus |
+| 38 | http://snomed.info/sct | 1187604002 | Serving in military service (finding) |
+| 38 | http://snomed.info/sct | 16114001 | Fracture of ankle (disorder) |
+| 37 | http://snomed.info/sct | 201834006 | Localized, primary osteoarthritis of the hand (disorder) |
+| 36 | http://snomed.info/sct | 403190006 | Epidermal burn of skin (disorder) |
+| 35 | http://snomed.info/sct | 91302008 | Sepsis (disorder) |
+| 35 | http://snomed.info/sct | 284551006 | Laceration of foot (disorder) |
+| 34 | http://snomed.info/sct | 58150001 | Fracture of clavicle (disorder) |
+| 34 | http://snomed.info/sct | 88805009 | Chronic congestive heart failure (disorder) |
+| 34 | http://snomed.info/sct | 284549007 | Laceration of hand (disorder) |
+| 33 | http://snomed.info/sct | 24079001 | Atopic dermatitis (disorder) |
+| 32 | http://snomed.info/sct | 263102004 | Fracture subluxation of wrist (disorder) |
+| 32 | http://snomed.info/sct | 446096008 | Perennial allergic rhinitis (disorder) |
+| 31 | http://snomed.info/sct | 233678006 | Childhood asthma (disorder) |
+| 31 | http://snomed.info/sct | 398254007 | Pre-eclampsia (disorder) |
+| 29 | http://snomed.info/sct | 84757009 | Epilepsy (disorder) |
+| 29 | http://snomed.info/sct | 368581000119106 | Neuropathy due to type 2 diabetes mellitus (disorder) |
+| 29 | http://snomed.info/sct | 26929004 | Alzheimer's disease (disorder) |
+| 29 | http://snomed.info/sct | 283371005 | Laceration of forearm (disorder) |
+| 29 | http://snomed.info/sct | 87433001 | Pulmonary emphysema (disorder) |
+| 28 | http://snomed.info/sct | 22298006 | Myocardial infarction (disorder) |
+| 28 | http://snomed.info/sct | 183996000 | Sterilization requested (situation) |
+| 27 | http://snomed.info/sct | 203082005 | Fibromyalgia (disorder) |
+| 27 | http://snomed.info/sct | 370247008 | Facial laceration (disorder) |
+| 27 | http://snomed.info/sct | 248595008 | Sputum finding (finding) |
+| 27 | http://snomed.info/sct | 713197008 | Recurrent rectal polyp (disorder) |
+| 27 | http://snomed.info/sct | 203646004 | Adolescent idiopathic scoliosis (disorder) |
+| 27 | http://snomed.info/sct | 125601008 | Injury of knee (disorder) |
+| 25 | http://snomed.info/sct | 401303003 | Acute ST segment elevation myocardial infarction (disorder) |
+| 25 | http://snomed.info/sct | 241929008 | Acute allergic reaction (disorder) |
+| 24 | http://snomed.info/sct | 198992004 | Eclampsia in pregnancy (disorder) |
+| 23 | http://snomed.info/sct | 403191005 | Partial thickness burn (disorder) |
+| 21 | http://snomed.info/sct | 35999006 | Blighted ovum (disorder) |
+| 21 | http://snomed.info/sct | 33737001 | Fracture of rib (disorder) |
+| 21 | http://snomed.info/sct | 46177005 | End-stage renal disease (disorder) |
+| 20 | http://snomed.info/sct | 1255252008 | Resorption of alveolar process due to dental trauma (disorder) |
+| 20 | http://snomed.info/sct | 254837009 | Malignant neoplasm of breast (disorder) |
+| 19 | http://snomed.info/sct | 443165006 | Osteoporotic fracture of bone (disorder) |
+| 18 | http://snomed.info/sct | 267102003 | Sore throat (finding) |
+| 17 | http://snomed.info/sct | 192127007 | Child attention deficit disorder (disorder) |
+| 17 | http://snomed.info/sct | 401314000 | Acute non-ST segment elevation myocardial infarction (disorder) |
+| 17 | http://snomed.info/sct | 46752004 | Torus palatinus (disorder) |
+| 17 | http://snomed.info/sct | 32911000 | Homeless (finding) |
+| 16 | http://snomed.info/sct | 267036007 | Dyspnea (finding) |
+| 16 | http://snomed.info/sct | 56018004 | Wheezing (finding) |
+| 16 | http://snomed.info/sct | 367498001 | Seasonal allergic rhinitis (disorder) |
+| 16 | http://snomed.info/sct | 232353008 | Perennial allergic rhinitis with seasonal variation (disorder) |
+| 15 | http://snomed.info/sct | 185086009 | Chronic obstructive bronchitis (disorder) |
+| 14 | http://snomed.info/sct | 307731004 | Injury of tendon of the rotator cuff of shoulder (disorder) |
+| 14 | http://snomed.info/sct | 239872002 | Osteoarthritis of hip (disorder) |
+| 14 | http://snomed.info/sct | 43724002 | Chill (finding) |
+| 14 | http://snomed.info/sct | 126906006 | Neoplasm of prostate (disorder) |
+| 14 | http://snomed.info/sct | 92691004 | Carcinoma in situ of prostate (disorder) |
+| 13 | http://snomed.info/sct | 62564004 | Concussion with loss of consciousness (disorder) |
+| 13 | http://snomed.info/sct | 109838007 | Overlapping malignant neoplasm of colon (disorder) |
+| 13 | http://snomed.info/sct | 427419006 | Transformed migraine (disorder) |
+| 13 | http://snomed.info/sct | 233604007 | Pneumonia (disorder) |
+| 13 | http://snomed.info/sct | 85116003 | Miscarriage in second trimester (disorder) |
+| 12 | http://snomed.info/sct | 315268008 | Suspected prostate cancer (situation) |
+| 11 | http://snomed.info/sct | 30832001 | Rupture of patellar tendon (disorder) |
+| 11 | http://snomed.info/sct | 162573006 | Suspected lung cancer (situation) |
+| 11 | http://snomed.info/sct | 359817006 | Closed fracture of hip (disorder) |
+| 10 | http://snomed.info/sct | 876882001 | Died in hospice (finding) |
+| 10 | http://snomed.info/sct | 79586000 | Tubal pregnancy (disorder) |
+| 10 | http://snomed.info/sct | 76571007 | Septic shock (disorder) |
+| 9 | http://snomed.info/sct | 73430006 | Sleep apnea (disorder) |
+| 9 | http://snomed.info/sct | 60573004 | Aortic valve stenosis (disorder) |
+| 9 | http://snomed.info/sct | 1231000119100 | History of aortic valve replacement (situation) |
+| 9 | http://snomed.info/sct | 422587007 | Nausea (finding) |
+| 9 | http://snomed.info/sct | 249497008 | Vomiting symptom (finding) |
+| 9 | http://snomed.info/sct | 389087006 | Hypoxemia (disorder) |
+| 9 | http://snomed.info/sct | 271825005 | Respiratory distress (finding) |
+| 9 | http://snomed.info/sct | 127294003 | Traumatic or nontraumatic brain injury (disorder) |
+| 9 | http://snomed.info/sct | 68962001 | Muscle pain (finding) |
+| 9 | http://snomed.info/sct | 57676002 | Joint pain |
+| 9 | http://snomed.info/sct | 49436004 | Atrial fibrillation (disorder) |
+| 9 | http://snomed.info/sct | 74400008 | Appendicitis (disorder) |
+| 8 | http://snomed.info/sct | 263172003 | Fracture of mandible (disorder) |
+| 8 | http://snomed.info/sct | 56786000 | Pulmonic valve stenosis (disorder) |
+| 8 | http://snomed.info/sct | 267253006 | Fetus with chromosomal abnormality (disorder) |
+| 8 | http://snomed.info/sct | 239720000 | Tear of meniscus of knee (disorder) |
+| 8 | http://snomed.info/sct | 25064002 | Headache (finding) |
+| 8 | http://snomed.info/sct | 449868002 | Smokes tobacco daily (finding) |
+| 8 | http://snomed.info/sct | 230690007 | Cerebrovascular accident (disorder) |
+| 7 | http://snomed.info/sct | 5602001 | Opioid abuse |
+| 7 | http://snomed.info/sct | 363406005 | Malignant neoplasm of colon (disorder) |
+| 7 | http://snomed.info/sct | 230265002 | Familial Alzheimer's disease of early onset (disorder) |
+| 7 | http://snomed.info/sct | 67782005 | Acute respiratory distress syndrome (disorder) |
+| 7 | http://snomed.info/sct | 408512008 | Body mass index 40+ - severely obese (finding) |
+| 7 | http://snomed.info/sct | 254637007 | Non-small cell lung cancer (disorder) |
+| 7 | http://snomed.info/sct | 424132000 | Non-small cell carcinoma of lung, TNM stage 1 (disorder) |
+| 6 | http://snomed.info/sct | 90560007 | Gout |
+| 6 | http://snomed.info/sct | 283545005 | Gunshot wound (disorder) |
+| 6 | http://snomed.info/sct | 262574004 | Bullet wound (disorder) |
+| 6 | http://snomed.info/sct | 7200002 | Alcoholism (disorder) |
+| 6 | http://snomed.info/sct | 83664006 | Idiopathic atrophic hypothyroidism (disorder) |
+| 5 | http://snomed.info/sct | 48724000 | Mitral valve regurgitation (disorder) |
+| 5 | http://snomed.info/sct | 65710008 | Acute respiratory failure (disorder) |
+| 5 | http://snomed.info/sct | 444470001 | Injury of anterior cruciate ligament (disorder) |
+| 5 | http://snomed.info/sct | 60234000 | Aortic valve regurgitation (disorder) |
+| 5 | http://snomed.info/sct | 81629009 | Traumatic dislocation of temporomandibular joint (disorder) |
+| 5 | http://snomed.info/sct | 67787004 | Tongue tie (disorder) |
+| 5 | http://snomed.info/sct | 37849005 | Congenital uterine anomaly (disorder) |
+| 5 | http://snomed.info/sct | 706870000 | Acute pulmonary embolism (disorder) |
+| 4 | http://snomed.info/sct | 132281000119108 | Acute deep venous thrombosis (disorder) |
+| 4 | http://snomed.info/sct | 6072007 | Bleeding from anus (disorder) |
+| 4 | http://snomed.info/sct | 236077008 | Protracted diarrhea (finding) |
+| 4 | http://snomed.info/sct | 109989006 | Multiple myeloma (disorder) |
+| 4 | http://snomed.info/sct | 770349000 | Sepsis caused by virus (disorder) |
+| 4 | http://snomed.info/sct | 254632001 | Small cell carcinoma of lung (disorder) |
+| 4 | http://snomed.info/sct | 67811000119102 | Primary small cell malignant neoplasm of lung, TNM stage 1 (disorder) |
+| 4 | http://snomed.info/sct | 93761005 | Primary malignant neoplasm of colon (disorder) |
+| 4 | http://snomed.info/sct | 65275009 | Acute cholecystitis (disorder) |
+| 4 | http://snomed.info/sct | 235919008 | Gallbladder calculus (disorder) |
+| 4 | http://snomed.info/sct | 97331000119101 | Macular edema and retinopathy due to type 2 diabetes mellitus (disorder) |
+| 4 | http://snomed.info/sct | 27942005 | Shock (disorder) |
+| 3 | http://snomed.info/sct | 312157006 | Infectious mediastinitis (disorder) |
+| 3 | http://snomed.info/sct | 698303004 | Awaiting transplantation of bone marrow (situation) |
+| 3 | http://snomed.info/sct | 444448004 | Injury of medial collateral ligament of knee (disorder) |
+| 3 | http://snomed.info/sct | 267060006 | Diarrhea symptom (finding) |
+| 3 | http://snomed.info/sct | 213150003 | Kidney transplant failure and rejection (disorder) |
+| 3 | http://snomed.info/sct | 370143000 | Major depressive disorder (disorder) |
+| 2 | http://snomed.info/sct | 45816000 | Pyelonephritis (disorder) |
+| 2 | http://snomed.info/sct | 94260004 | Metastatic malignant neoplasm to colon (disorder) |
+| 2 | http://snomed.info/sct | 153351000119102 | History of peripheral stem cell transplant (situation) |
+| 2 | http://snomed.info/sct | 40275004 | Contact dermatitis (disorder) |
+| 2 | http://snomed.info/sct | 68235000 | Nasal congestion (finding) |
+| 2 | http://snomed.info/sct | 4557003 | Preinfarction syndrome (disorder) |
+| 2 | http://snomed.info/sct | 69896004 | Rheumatoid arthritis (disorder) |
+| 2 | http://snomed.info/sct | 47505003 | Posttraumatic stress disorder (disorder) |
+| 2 | http://snomed.info/sct | 161679004 | History of artificial joint (situation) |
+| 2 | http://snomed.info/sct | 108631000119101 | History of autologous bone marrow transplant (situation) |
+| 2 | http://snomed.info/sct | 262521009 | Traumatic injury of spinal cord and/or vertebral column (disorder) |
+| 1 | http://snomed.info/sct | 234466008 | Acquired coagulation disorder (disorder) |
+| 1 | http://snomed.info/sct | 84114007 | Heart failure (disorder) |
+| 1 | http://snomed.info/sct | 152621000119105 | History of allotransplantation of bone marrow (situation) |
+| 1 | http://snomed.info/sct | 128188000 | Cerebral palsy (disorder) |
+| 1 | http://snomed.info/sct | 221360009 | Spasticity (finding) |
+| 1 | http://snomed.info/sct | 110359009 | Intellectual disability (disorder) |
+| 1 | http://snomed.info/sct | 157265008 | Dislocation of hip joint (disorder) |
+| 1 | http://snomed.info/sct | 11625007 | Torus mandibularis (disorder) |
+| 1 | http://snomed.info/sct | 94503003 | Metastatic malignant neoplasm to prostate (disorder) |
+| 1 | http://snomed.info/sct | 1501000119109 | Proliferative diabetic retinopathy due to type II diabetes mellitus |
+| 1 | http://snomed.info/sct | 62479008 | Acquired immune deficiency syndrome (disorder) |
+| 1 | http://snomed.info/sct | 86406008 | Human immunodeficiency virus infection (disorder) |
+| 1 | http://snomed.info/sct | 1734006 | Fracture of vertebral column with spinal cord injury (disorder) |
+| 1 | http://snomed.info/sct | 47693006 | Rupture of appendix (disorder) |
+| 1 | http://snomed.info/sct | 204949001 | Renal dysplasia (disorder) |
+| 1 | http://snomed.info/sct | 93143009 | Leukemia, disease (disorder) |
+| 1 | http://snomed.info/sct | 111287006 | Tricuspid valve regurgitation (disorder) |
+| 1 | http://snomed.info/sct | 95417003 | Primary fibromyalgia syndrome (disorder) |
+| 1 | http://snomed.info/sct | 200936003 | Lupus erythematosus (disorder) |
+| 1 | http://snomed.info/sct | 403192003 | Full thickness burn (disorder) |
+| 1 | http://snomed.info/sct | 15724005 | Fracture of vertebral column without spinal cord injury (disorder) |
+
+### Encounter (58 distinct codes)
+
+| Count | System | Code | Display |
+|---|---|---|---|
+| 68304 | http://terminology.hl7.org/CodeSystem/v3-ActCode | AMB | (no display) |
+| 19668 | http://snomed.info/sct | 185347001 | Encounter for problem (procedure) |
+| 12506 | http://snomed.info/sct | 185349003 | Encounter for check up (procedure) |
+| 10784 | http://snomed.info/sct | 162673000 | General examination of patient (procedure) |
+| 3986 | http://snomed.info/sct | 702927004 | Urgent care clinic (environment) |
+| 3867 | http://snomed.info/sct | 185345009 | Encounter for symptom (procedure) |
+| 3555 | http://snomed.info/sct | 410620009 | Well child visit (procedure) |
+| 2899 | http://terminology.hl7.org/CodeSystem/v3-ActCode | EMER | (no display) |
+| 2550 | http://snomed.info/sct | 424619006 | Prenatal visit (regime/therapy) |
+| 2279 | http://snomed.info/sct | 50849002 | Emergency room admission (procedure) |
+| 1866 | http://snomed.info/sct | 308335008 | Patient encounter procedure (procedure) |
+| 1841 | http://snomed.info/sct | 371883000 | Outpatient procedure (procedure) |
+| 1772 | http://snomed.info/sct | 390906007 | Follow-up encounter (procedure) |
+| 1484 | http://terminology.hl7.org/CodeSystem/v3-ActCode | IMP | (no display) |
+| 1334 | http://snomed.info/sct | 33879002 | Administration of vaccine to produce active immunity (procedure) |
+| 1211 | http://snomed.info/sct | 698314001 | Consultation for treatment (procedure) |
+| 1069 | http://snomed.info/sct | 36228007 | Ophthalmic examination and evaluation (procedure) |
+| 864 | http://snomed.info/sct | 448337001 | Telemedicine consultation with patient (procedure) |
+| 609 | http://terminology.hl7.org/CodeSystem/v3-ActCode | HH | (no display) |
+| 466 | http://snomed.info/sct | 424441002 | Prenatal initial visit (regime/therapy) |
+| 425 | http://snomed.info/sct | 439708006 | Home visit (procedure) |
+| 397 | http://snomed.info/sct | 439740005 | Postoperative follow-up visit (procedure) |
+| 331 | http://snomed.info/sct | 32485007 | Hospital admission (procedure) |
+| 323 | http://snomed.info/sct | 394701000 | Asthma follow-up (regime/therapy) |
+| 270 | http://snomed.info/sct | 169762003 | Postnatal visit (regime/therapy) |
+| 269 | http://snomed.info/sct | 183460006 | Obstetric emergency hospital admission (procedure) |
+| 209 | http://snomed.info/sct | 56876005 | Drug rehabilitation and detoxification (regime/therapy) |
+| 184 | http://snomed.info/sct | 305336008 | Admission to hospice (procedure) |
+| 168 | http://snomed.info/sct | 308646001 | Death Certification |
+| 152 | http://terminology.hl7.org/CodeSystem/v3-ActCode | VR | (no display) |
+| 151 | http://snomed.info/sct | 410410006 | Screening surveillance (regime/therapy) |
+| 133 | http://snomed.info/sct | 305408004 | Admission to surgical department (procedure) |
+| 128 | http://snomed.info/sct | 183452005 | Emergency hospital admission (procedure) |
+| 109 | http://snomed.info/sct | 310061009 | Gynecology service (qualifier value) |
+| 82 | http://snomed.info/sct | 270427003 | Patient-initiated encounter (procedure) |
+| 72 | http://snomed.info/sct | 305351004 | Admission to intensive care unit (procedure) |
+| 66 | http://snomed.info/sct | 305342007 | Admission to ward (procedure) |
+| 62 | http://snomed.info/sct | 281036007 | Follow-up consultation (procedure) |
+| 56 | http://snomed.info/sct | 210098006 | Domiciliary or rest home patient evaluation and management (procedure) |
+| 55 | http://snomed.info/sct | 170837001 | Allergic disorder initial assessment (regime/therapy) |
+| 54 | http://snomed.info/sct | 397821002 | Patient transfer to intensive care unit (procedure) |
+| 54 | http://snomed.info/sct | 183478001 | Emergency hospital admission for asthma (procedure) |
+| 48 | http://snomed.info/sct | 305432006 | Admission to surgical transplant department (procedure) |
+| 35 | http://snomed.info/sct | 170838006 | Allergic disorder follow-up assessment (regime/therapy) |
+| 30 | http://snomed.info/sct | 185389009 | Follow-up visit (procedure) |
+| 25 | http://snomed.info/sct | 185317003 | Telephone encounter (procedure) |
+| 22 | http://snomed.info/sct | 183495009 | Non-urgent orthopedic admission (procedure) |
+| 12 | http://snomed.info/sct | 453131000124105 | Videotelephony encounter (procedure) |
+| 10 | http://snomed.info/sct | 305411003 | Admission to thoracic surgery department (procedure) |
+| 9 | http://snomed.info/sct | 1505002 | Hospital admission for isolation (procedure) |
+| 9 | http://snomed.info/sct | 47505003 | Posttraumatic stress disorder (disorder) |
+| 7 | http://snomed.info/sct | 86013001 | Periodic reevaluation and management of healthy individual (procedure) |
+| 6 | http://snomed.info/sct | 79094001 | Initial psychiatric interview with mental status and evaluation (procedure) |
+| 6 | http://snomed.info/sct | 223484005 | Discussion about treatment (procedure) |
+| 5 | http://snomed.info/sct | 308251003 | Admission to clinical oncology department (procedure) |
+| 4 | http://snomed.info/sct | 4525004 | Emergency department patient visit (procedure) |
+| 3 | http://snomed.info/sct | 386395000 | Preoperative coordination (regime/therapy) |
+| 1 | http://snomed.info/sct | 108219001 | Physician visit with evaluation AND/OR management service (procedure) |
 
 ### Observation (281 distinct codes)
 
@@ -1345,3 +1110,240 @@ Every distinct `(system, code, display)` triple actually present, sorted by freq
 | 1 | http://loinc.org | 7917-8 | HIV 1 Ab [Presence] in Serum |
 | 1 | http://loinc.org | 21924-6 | Tumor marker Cancer |
 | 1 | http://loinc.org | 18752-6 | Exercise stress test study |
+
+### CarePlan (37 distinct codes)
+
+| Count | System | Code | Display |
+|---|---|---|---|
+| 4006 | http://hl7.org/fhir/us/core/CodeSystem/careplan-category | assess-plan | (no display) |
+| 603 | http://snomed.info/sct | 53950000 | Respiratory therapy (procedure) |
+| 511 | http://snomed.info/sct | 735985000 | Diabetes self management plan (record artifact) |
+| 306 | http://snomed.info/sct | 134435003 | Routine antenatal care (regime/therapy) |
+| 260 | http://snomed.info/sct | 443402002 | Lifestyle education regarding hypertension (procedure) |
+| 209 | http://snomed.info/sct | 384758001 | Self-care interventions (procedure) |
+| 208 | http://snomed.info/sct | 773513001 | Physiotherapy care plan (record artifact) |
+| 189 | http://snomed.info/sct | 736376001 | Infectious disease care plan (record artifact) |
+| 187 | http://snomed.info/sct | 385691007 | Fracture care (regime/therapy) |
+| 182 | http://snomed.info/sct | 408869004 | Musculoskeletal care (regime/therapy) |
+| 171 | http://snomed.info/sct | 734163000 | Care plan (record artifact) |
+| 166 | http://snomed.info/sct | 225358003 | Wound care (regime/therapy) |
+| 127 | http://snomed.info/sct | 736285004 | Hyperlipidemia clinical management plan (record artifact) |
+| 120 | http://snomed.info/sct | 276239002 | Therapy (regime/therapy) |
+| 78 | http://snomed.info/sct | 47387005 | Head injury rehabilitation (regime/therapy) |
+| 68 | http://snomed.info/sct | 736353004 | Inpatient care plan (record artifact) |
+| 68 | http://snomed.info/sct | 699728000 | Asthma self management (regime/therapy) |
+| 60 | http://snomed.info/sct | 133901003 | Burn care (regime/therapy) |
+| 55 | http://snomed.info/sct | 736690008 | Dialysis care plan (record artifact) |
+| 50 | http://snomed.info/sct | 736372004 | Discharge care plan (record artifact) |
+| 48 | http://snomed.info/sct | 170836005 | Allergic disorder monitoring (regime/therapy) |
+| 47 | http://snomed.info/sct | 718361005 | Weight management program (regime/therapy) |
+| 44 | http://snomed.info/sct | 736283006 | Chronic obstructive pulmonary disease clinical management plan (record artifact) |
+| 40 | http://snomed.info/sct | 736252007 | Cancer care plan (record artifact) |
+| 36 | http://snomed.info/sct | 386257007 | Dementia management (regime/therapy) |
+| 35 | http://snomed.info/sct | 711282006 | Skin condition care (regime/therapy) |
+| 34 | http://snomed.info/sct | 735984001 | Heart failure self management plan (record artifact) |
+| 28 | http://snomed.info/sct | 737471002 | Minor surgery care management (procedure) |
+| 22 | http://snomed.info/sct | 737567002 | Major surgery care management (procedure) |
+| 17 | http://snomed.info/sct | 386522008 | Overactivity/inattention behavior management (regime/therapy) |
+| 11 | http://snomed.info/sct | 182964004 | Terminal care (regime/therapy) |
+| 9 | http://snomed.info/sct | 736254008 | Psychiatry care plan (record artifact) |
+| 5 | http://snomed.info/sct | 735321000 | Surgical inpatient care plan (record artifact) |
+| 5 | http://snomed.info/sct | 208748005 | Open dislocation of jaw (disorder) |
+| 5 | http://snomed.info/sct | 718347000 | Mental health care plan (record artifact) |
+| 1 | http://snomed.info/sct | 781087000 | Medical care (regime/therapy) |
+| 1 | http://snomed.info/sct | 75162002 | Spinal cord injury rehabilitation (regime/therapy) |
+
+### MedicationRequest (190 distinct codes)
+
+| Count | System | Code | Display |
+|---|---|---|---|
+| 6320 | http://www.nlm.nih.gov/research/umls/rxnorm | 106892 | insulin isophane, human 70 UNT/ML / insulin, regular, human 30 UNT/ML Injectable Suspension [Humulin] |
+| 6235 | http://www.nlm.nih.gov/research/umls/rxnorm | 314076 | lisinopril 10 MG Oral Tablet |
+| 4843 | http://www.nlm.nih.gov/research/umls/rxnorm | 310798 | Hydrochlorothiazide 25 MG Oral Tablet |
+| 4116 | http://www.nlm.nih.gov/research/umls/rxnorm | 308136 | amLODIPine 2.5 MG Oral Tablet |
+| 3423 | http://www.nlm.nih.gov/research/umls/rxnorm | 860975 | 24 HR Metformin hydrochloride 500 MG Extended Release Oral Tablet |
+| 1155 | http://www.nlm.nih.gov/research/umls/rxnorm | 314231 | Simvastatin 10 MG Oral Tablet |
+| 1109 | http://www.nlm.nih.gov/research/umls/rxnorm | 1664463 | 24 HR tacrolimus 1 MG Extended Release Oral Tablet [Envarsus] |
+| 892 | http://www.nlm.nih.gov/research/umls/rxnorm | 904419 | Alendronic acid 10 MG Oral Tablet |
+| 838 | http://www.nlm.nih.gov/research/umls/rxnorm | 206905 | Ibuprofen 400 MG Oral Tablet [Ibu] |
+| 694 | http://www.nlm.nih.gov/research/umls/rxnorm | 209387 | Acetaminophen 325 MG Oral Tablet [Tylenol] |
+| 680 | http://www.nlm.nih.gov/research/umls/rxnorm | 856987 | Acetaminophen 300 MG / Hydrocodone Bitartrate 5 MG Oral Tablet |
+| 679 | http://www.nlm.nih.gov/research/umls/rxnorm | 245314 | albuterol 5 MG/ML Inhalation Solution |
+| 662 | http://www.nlm.nih.gov/research/umls/rxnorm | 896209 | 60 ACTUAT Fluticasone propionate 0.25 MG/ACTUAT / salmeterol 0.05 MG/ACTUAT Dry Powder Inhaler |
+| 612 | http://www.nlm.nih.gov/research/umls/rxnorm | 313782 | Acetaminophen 325 MG Oral Tablet |
+| 540 | http://www.nlm.nih.gov/research/umls/rxnorm | 630208 | albuterol 0.83 MG/ML Inhalation Solution |
+| 532 | http://www.nlm.nih.gov/research/umls/rxnorm | 1049625 | Acetaminophen 325 MG / Oxycodone Hydrochloride 10 MG Oral Tablet [Percocet] |
+| 495 | http://www.nlm.nih.gov/research/umls/rxnorm | 897685 | verapamil hydrochloride 80 MG Oral Tablet [Calan] |
+| 495 | http://www.nlm.nih.gov/research/umls/rxnorm | 855332 | Warfarin Sodium 5 MG Oral Tablet |
+| 495 | http://www.nlm.nih.gov/research/umls/rxnorm | 197604 | Digoxin 0.125 MG Oral Tablet |
+| 411 | http://www.nlm.nih.gov/research/umls/rxnorm | 895996 | 120 ACTUAT fluticasone propionate 0.044 MG/ACTUAT Metered Dose Inhaler [Flovent] |
+| 303 | http://www.nlm.nih.gov/research/umls/rxnorm | 835603 | tramadol hydrochloride 50 MG Oral Tablet |
+| 278 | http://www.nlm.nih.gov/research/umls/rxnorm | 849574 | Naproxen sodium 220 MG Oral Tablet |
+| 272 | http://www.nlm.nih.gov/research/umls/rxnorm | 351109 | budesonide 0.25 MG/ML Inhalation Suspension |
+| 269 | http://www.nlm.nih.gov/research/umls/rxnorm | 745752 | NDA021457 200 ACTUAT albuterol 0.09 MG/ACTUAT Metered Dose Inhaler [ProAir] |
+| 264 | http://www.nlm.nih.gov/research/umls/rxnorm | 562251 | Amoxicillin 250 MG / Clavulanate 125 MG Oral Tablet |
+| 212 | http://www.nlm.nih.gov/research/umls/rxnorm | 245134 | 72 HR Fentanyl 0.025 MG/HR Transdermal System |
+| 201 | http://www.nlm.nih.gov/research/umls/rxnorm | 313988 | Furosemide 40 MG Oral Tablet |
+| 199 | http://www.nlm.nih.gov/research/umls/rxnorm | 310965 | Ibuprofen 200 MG Oral Tablet |
+| 199 | http://www.nlm.nih.gov/research/umls/rxnorm | 705129 | Nitroglycerin 0.4 MG/ACTUAT Mucosal Spray |
+| 193 | http://www.nlm.nih.gov/research/umls/rxnorm | 866412 | 24 HR metoprolol succinate 100 MG Extended Release Oral Tablet |
+| 189 | http://www.nlm.nih.gov/research/umls/rxnorm | 1860491 | 12 HR Hydrocodone Bitartrate 10 MG Extended Release Oral Capsule |
+| 177 | http://www.nlm.nih.gov/research/umls/rxnorm | 309362 | Clopidogrel 75 MG Oral Tablet |
+| 174 | http://www.nlm.nih.gov/research/umls/rxnorm | 312961 | Simvastatin 20 MG Oral Tablet |
+| 174 | http://www.nlm.nih.gov/research/umls/rxnorm | 1049504 | Abuse-Deterrent 12 HR Oxycodone Hydrochloride 10 MG Extended Release Oral Tablet [Oxycontin] |
+| 158 | http://www.nlm.nih.gov/research/umls/rxnorm | 896001 | 120 ACTUAT fluticasone propionate 0.11 MG/ACTUAT Metered Dose Inhaler [Flovent] |
+| 155 | http://www.nlm.nih.gov/research/umls/rxnorm | 1043400 | Acetaminophen 21.7 MG/ML / Dextromethorphan Hydrobromide 1 MG/ML / doxylamine succinate 0.417 MG/ML Oral Solution |
+| 138 | http://www.nlm.nih.gov/research/umls/rxnorm | 349094 | budesonide 0.125 MG/ML Inhalation Suspension |
+| 134 | http://www.nlm.nih.gov/research/umls/rxnorm | 200033 | carvedilol 25 MG Oral Tablet |
+| 128 | http://www.nlm.nih.gov/research/umls/rxnorm | 993770 | Acetaminophen 300 MG / Codeine Phosphate 15 MG Oral Tablet |
+| 127 | http://www.nlm.nih.gov/research/umls/rxnorm | 1870230 | NDA020800 0.3 ML Epinephrine 1 MG/ML Auto-Injector |
+| 124 | http://www.nlm.nih.gov/research/umls/rxnorm | 757594 | {28 (norethindrone 0.35 MG Oral Tablet) } Pack [Jolivette 28 Day] |
+| 114 | http://www.nlm.nih.gov/research/umls/rxnorm | 314077 | lisinopril 20 MG Oral Tablet |
+| 113 | http://www.nlm.nih.gov/research/umls/rxnorm | 198405 | Ibuprofen 100 MG Oral Tablet |
+| 111 | http://www.nlm.nih.gov/research/umls/rxnorm | 859088 | NDA020983 200 ACTUAT albuterol 0.09 MG/ACTUAT Metered Dose Inhaler [Ventolin] |
+| 110 | http://www.nlm.nih.gov/research/umls/rxnorm | 748962 | {28 (norethindrone 0.35 MG Oral Tablet) } Pack [Camila 28 Day] |
+| 110 | http://www.nlm.nih.gov/research/umls/rxnorm | 979492 | losartan potassium 50 MG Oral Tablet |
+| 109 | http://www.nlm.nih.gov/research/umls/rxnorm | 313820 | Acetaminophen 160 MG Chewable Tablet |
+| 104 | http://www.nlm.nih.gov/research/umls/rxnorm | 351137 | albuterol 0.21 MG/ML Inhalation Solution |
+| 91 | http://www.nlm.nih.gov/research/umls/rxnorm | 616830 | budesonide 0.125 MG/ML Inhalation Suspension [Pulmicort] |
+| 87 | http://www.nlm.nih.gov/research/umls/rxnorm | 831533 | {28 (norethindrone 0.35 MG Oral Tablet) } Pack [Errin 28 Day] |
+| 86 | http://www.nlm.nih.gov/research/umls/rxnorm | 351266 | buprenorphine 2 MG / naloxone 0.5 MG Sublingual Tablet |
+| 84 | http://www.nlm.nih.gov/research/umls/rxnorm | 856987 | Acetaminophen 300 MG / HYDROcodone Bitartrate 5 MG Oral Tablet |
+| 83 | http://www.nlm.nih.gov/research/umls/rxnorm | 834102 | Penicillin V Potassium 500 MG Oral Tablet |
+| 81 | http://www.nlm.nih.gov/research/umls/rxnorm | 308192 | Amoxicillin 500 MG Oral Tablet |
+| 78 | http://www.nlm.nih.gov/research/umls/rxnorm | 751905 | {7 (ethinyl estradiol 0.035 MG / norgestimate 0.18 MG Oral Tablet) / 7 (ethinyl estradiol 0.035 MG / norgestimate 0.215 MG Oral Tablet) / 7 (ethinyl estradiol 0.035 MG / norgestimate 0.25 MG Oral Tablet) / 7 (inert ingredients 1 MG Oral Tablet) } Pack [Trinessa 28 Day] |
+| 77 | http://www.nlm.nih.gov/research/umls/rxnorm | 834061 | Penicillin V Potassium 250 MG Oral Tablet |
+| 71 | http://www.nlm.nih.gov/research/umls/rxnorm | 748856 | {24 (drospirenone 3 MG / ethinyl estradiol 0.02 MG Oral Tablet) / 4 (inert ingredients 1 MG Oral Tablet) } Pack [Yaz 28 Day] |
+| 68 | http://www.nlm.nih.gov/research/umls/rxnorm | 310325 | ferrous sulfate 325 MG Oral Tablet |
+| 67 | http://www.nlm.nih.gov/research/umls/rxnorm | 748879 | {21 (ethinyl estradiol 0.03 MG / levonorgestrel 0.15 MG Oral Tablet) / 7 (inert ingredients 1 MG Oral Tablet) } Pack [Levora 0.15/30 28 Day] |
+| 64 | http://www.nlm.nih.gov/research/umls/rxnorm | 1860154 | Abuse-Deterrent 12 HR Oxycodone Hydrochloride 15 MG Extended Release Oral Tablet |
+| 63 | http://www.nlm.nih.gov/research/umls/rxnorm | 1049221 | Acetaminophen 325 MG / Oxycodone Hydrochloride 5 MG Oral Tablet |
+| 60 | http://www.nlm.nih.gov/research/umls/rxnorm | 978950 | {5 (dienogest 2 MG / estradiol valerate 2 MG Oral Tablet) / 17 (dienogest 3 MG / estradiol valerate 2 MG Oral Tablet) / 2 (estradiol valerate 1 MG Oral Tablet) / 2 (estradiol valerate 3 MG Oral Tablet) / 2 (inert ingredients 1 MG Oral Tablet) } Pack [Natazia 28 Day] |
+| 58 | http://www.nlm.nih.gov/research/umls/rxnorm | 749762 | {7 (ethinyl estradiol 0.01 MG Oral Tablet) / 84 (ethinyl estradiol 0.03 MG / levonorgestrel 0.15 MG Oral Tablet) } Pack [Seasonique] |
+| 55 | http://www.nlm.nih.gov/research/umls/rxnorm | 861467 | Meperidine Hydrochloride 50 MG Oral Tablet |
+| 53 | http://www.nlm.nih.gov/research/umls/rxnorm | 351136 | albuterol 0.417 MG/ML Inhalation Solution |
+| 51 | http://www.nlm.nih.gov/research/umls/rxnorm | 2001499 | Vitamin B12 5 MG/ML Injectable Solution |
+| 48 | http://www.nlm.nih.gov/research/umls/rxnorm | 1367439 | 21 DAY ethinyl estradiol 0.000625 MG/HR / etonogestrel 0.005 MG/HR Vaginal System [NuvaRing] |
+| 45 | http://www.nlm.nih.gov/research/umls/rxnorm | 1431987 | 24 HR tacrolimus 5 MG Extended Release Oral Capsule [Astagraf] |
+| 44 | http://www.nlm.nih.gov/research/umls/rxnorm | 997488 | Fexofenadine hydrochloride 30 MG Oral Tablet |
+| 43 | http://www.nlm.nih.gov/research/umls/rxnorm | 665078 | Loratadine 5 MG Chewable Tablet |
+| 41 | http://www.nlm.nih.gov/research/umls/rxnorm | 106258 | Hydrocortisone 10 MG/ML Topical Cream |
+| 40 | http://www.nlm.nih.gov/research/umls/rxnorm | 2563431 | aspirin 81 MG Oral Capsule [Vazalore] |
+| 39 | http://www.nlm.nih.gov/research/umls/rxnorm | 1648755 | nitrofurantoin, macrocrystals 25 MG / nitrofurantoin, monohydrate 75 MG Oral Capsule |
+| 37 | http://www.nlm.nih.gov/research/umls/rxnorm | 243670 | aspirin 81 MG Oral Tablet |
+| 37 | http://www.nlm.nih.gov/research/umls/rxnorm | 1049221 | Acetaminophen 325 MG / oxyCODONE Hydrochloride 5 MG Oral Tablet |
+| 36 | http://www.nlm.nih.gov/research/umls/rxnorm | 308182 | Amoxicillin 250 MG Oral Capsule |
+| 35 | http://www.nlm.nih.gov/research/umls/rxnorm | 1049630 | diphenhydrAMINE Hydrochloride 25 MG Oral Tablet |
+| 33 | http://www.nlm.nih.gov/research/umls/rxnorm | 309097 | Cefuroxime 250 MG Oral Tablet |
+| 31 | http://www.nlm.nih.gov/research/umls/rxnorm | 309309 | ciprofloxacin 500 MG Oral Tablet |
+| 30 | http://www.nlm.nih.gov/research/umls/rxnorm | 857005 | Acetaminophen 325 MG / HYDROcodone Bitartrate 7.5 MG Oral Tablet |
+| 29 | http://www.nlm.nih.gov/research/umls/rxnorm | 1534809 | 168 HR Ethinyl Estradiol 0.00146 MG/HR / norelgestromin 0.00625 MG/HR Transdermal System |
+| 28 | http://www.nlm.nih.gov/research/umls/rxnorm | 855812 | prasugrel 10 MG Oral Tablet |
+| 27 | http://www.nlm.nih.gov/research/umls/rxnorm | 197511 | ciprofloxacin 250 MG Oral Tablet |
+| 26 | http://www.nlm.nih.gov/research/umls/rxnorm | 310436 | Galantamine 4 MG Oral Tablet |
+| 23 | http://www.nlm.nih.gov/research/umls/rxnorm | 979485 | losartan potassium 25 MG Oral Tablet |
+| 22 | http://www.nlm.nih.gov/research/umls/rxnorm | 197454 | cephalexin 500 MG Oral Tablet |
+| 20 | http://www.nlm.nih.gov/research/umls/rxnorm | 204892 | clonazePAM 0.25 MG Oral Tablet |
+| 20 | http://www.nlm.nih.gov/research/umls/rxnorm | 308971 | carbamazepine 20 MG/ML Oral Suspension [Tegretol] |
+| 19 | http://www.nlm.nih.gov/research/umls/rxnorm | 477045 | Chlorpheniramine Maleate 2 MG/ML Oral Solution |
+| 19 | http://www.nlm.nih.gov/research/umls/rxnorm | 235389 | Mestranol / Norethynodrel |
+| 17 | http://www.nlm.nih.gov/research/umls/rxnorm | 1536144 | 120 ACTUAT mometasone furoate 0.1 MG/ACTUAT Metered Dose Inhaler [Asmanex] |
+| 17 | http://www.nlm.nih.gov/research/umls/rxnorm | 1656356 | sacubitril 97 MG / valsartan 103 MG Oral Tablet [Entresto] |
+| 16 | http://www.nlm.nih.gov/research/umls/rxnorm | 1804799 | Alteplase 100 MG Injection |
+| 15 | http://www.nlm.nih.gov/research/umls/rxnorm | 1649987 | doxycycline hyclate 100 MG |
+| 15 | http://www.nlm.nih.gov/research/umls/rxnorm | 241834 | cycloSPORINE, modified 100 MG Oral Capsule |
+| 15 | http://www.nlm.nih.gov/research/umls/rxnorm | 198335 | sulfamethoxazole 800 MG / trimethoprim 160 MG Oral Tablet |
+| 14 | http://www.nlm.nih.gov/research/umls/rxnorm | 243670 | Aspirin 81 MG Oral Tablet |
+| 14 | http://www.nlm.nih.gov/research/umls/rxnorm | 1599803 | 24 HR Donepezil hydrochloride 10 MG / Memantine hydrochloride 28 MG Extended Release Oral Capsule |
+| 13 | http://www.nlm.nih.gov/research/umls/rxnorm | 197591 | Diazepam 5 MG Oral Tablet |
+| 13 | http://www.nlm.nih.gov/research/umls/rxnorm | 1014676 | cetirizine hydrochloride 5 MG Oral Tablet |
+| 13 | http://www.nlm.nih.gov/research/umls/rxnorm | 197378 | Astemizole 10 MG Oral Tablet |
+| 13 | http://www.nlm.nih.gov/research/umls/rxnorm | 284988 | didanosine 400 MG Delayed Release Oral Capsule |
+| 12 | http://www.nlm.nih.gov/research/umls/rxnorm | 749882 | {7 (inert ingredients 1 MG Oral Tablet) / 21 (mestranol 0.05 MG / norethindrone 1 MG Oral Tablet) } Pack [Norinyl 1+50 28 Day] |
+| 11 | http://www.nlm.nih.gov/research/umls/rxnorm | 617296 | amoxicillin 500 MG / clavulanate 125 MG Oral Tablet |
+| 9 | http://www.nlm.nih.gov/research/umls/rxnorm | 617311 | atorvastatin 40 MG Oral Tablet |
+| 8 | http://www.nlm.nih.gov/research/umls/rxnorm | 855332 | warfarin sodium 5 MG Oral Tablet |
+| 8 | http://www.nlm.nih.gov/research/umls/rxnorm | 198014 | Naproxen 500 MG Oral Tablet |
+| 8 | http://www.nlm.nih.gov/research/umls/rxnorm | 749785 | {7 (ethinyl estradiol 0.035 MG / norgestimate 0.18 MG Oral Tablet) / 7 (ethinyl estradiol 0.035 MG / norgestimate 0.215 MG Oral Tablet) / 7 (ethinyl estradiol 0.035 MG / norgestimate 0.25 MG Oral Tablet) / 7 (inert ingredients 1 MG Oral Tablet) } Pack [Ortho Tri-Cyclen 28 Day] |
+| 8 | http://www.nlm.nih.gov/research/umls/rxnorm | 198031 | 24 HR nicotine 0.292 MG/HR Transdermal System |
+| 7 | http://www.nlm.nih.gov/research/umls/rxnorm | 312938 | Sertraline 100 MG Oral Tablet |
+| 7 | http://www.nlm.nih.gov/research/umls/rxnorm | 896006 | 120 ACTUAT fluticasone propionate 0.22 MG/ACTUAT Metered Dose Inhaler [Flovent] |
+| 7 | http://www.nlm.nih.gov/research/umls/rxnorm | 313110 | stavudine 40 MG Oral Capsule |
+| 7 | http://www.nlm.nih.gov/research/umls/rxnorm | 310988 | indinavir 400 MG Oral Capsule |
+| 6 | http://www.nlm.nih.gov/research/umls/rxnorm | 866924 | metoprolol tartrate 25 MG Oral Tablet |
+| 6 | http://www.nlm.nih.gov/research/umls/rxnorm | 1648756 | nitrofurantoin, macrocrystals 25 MG / nitrofurantoin, monohydrate 75 MG [Macrobid] |
+| 6 | http://www.nlm.nih.gov/research/umls/rxnorm | 197319 | Allopurinol 100 MG Oral Tablet |
+| 6 | http://www.nlm.nih.gov/research/umls/rxnorm | 966222 | Levothyroxine Sodium 0.075 MG Oral Tablet |
+| 6 | http://www.nlm.nih.gov/research/umls/rxnorm | 312615 | predniSONE 20 MG Oral Tablet |
+| 6 | http://www.nlm.nih.gov/research/umls/rxnorm | 476556 | emtricitabine 200 MG / tenofovir disoproxil fumarate 300 MG Oral Tablet |
+| 5 | http://www.nlm.nih.gov/research/umls/rxnorm | 1091392 | Methylphenidate Hydrochloride 20 MG Oral Tablet |
+| 5 | http://www.nlm.nih.gov/research/umls/rxnorm | 979480 | losartan potassium 100 MG Oral Tablet |
+| 5 | http://www.nlm.nih.gov/research/umls/rxnorm | 311372 | Loratadine 10 MG Oral Tablet |
+| 5 | http://www.nlm.nih.gov/research/umls/rxnorm | 1359133 | {5 (ethinyl estradiol 0.02 MG / norethindrone acetate 1 MG Oral Tablet) / 7 (ethinyl estradiol 0.03 MG / norethindrone acetate 1 MG Oral Tablet) / 9 (ethinyl estradiol 0.035 MG / norethindrone acetate 1 MG Oral Tablet) / 7 (ferrous fumarate 75 MG Oral Tablet) } Pack [Estrostep Fe 28 Day] |
+| 5 | http://www.nlm.nih.gov/research/umls/rxnorm | 617312 | atorvastatin 10 MG Oral Tablet |
+| 4 | http://www.nlm.nih.gov/research/umls/rxnorm | 313185 | Tacrine 10 MG Oral Capsule |
+| 4 | http://www.nlm.nih.gov/research/umls/rxnorm | 608139 | atomoxetine 100 MG Oral Capsule |
+| 4 | http://www.nlm.nih.gov/research/umls/rxnorm | 1100184 | Donepezil hydrochloride 23 MG Oral Tablet |
+| 4 | http://www.nlm.nih.gov/research/umls/rxnorm | 562508 | amoxicillin 875 MG / clavulanate 125 MG Oral Tablet |
+| 4 | http://www.nlm.nih.gov/research/umls/rxnorm | 197884 | lisinopril 40 MG Oral Tablet |
+| 4 | http://www.nlm.nih.gov/research/umls/rxnorm | 856980 | acetaminophen 300 MG / hydrocodone bitartrate 10 MG Oral Tablet |
+| 4 | http://www.nlm.nih.gov/research/umls/rxnorm | 141918 | Terfenadine 60 MG Oral Tablet |
+| 4 | http://www.nlm.nih.gov/research/umls/rxnorm | 259255 | atorvastatin 80 MG Oral Tablet |
+| 4 | http://www.nlm.nih.gov/research/umls/rxnorm | 313002 | Sodium Chloride 9 MG/ML Injectable Solution |
+| 4 | http://www.nlm.nih.gov/research/umls/rxnorm | 199663 | zidovudine 300 MG Oral Tablet |
+| 4 | http://www.nlm.nih.gov/research/umls/rxnorm | 349477 | efavirenz 600 MG Oral Tablet |
+| 3 | http://www.nlm.nih.gov/research/umls/rxnorm | 284215 | clindamycin 300 MG Oral Capsule |
+| 3 | http://www.nlm.nih.gov/research/umls/rxnorm | 686924 | carvedilol 3.125 MG Oral Tablet |
+| 3 | http://www.nlm.nih.gov/research/umls/rxnorm | 904467 | pravastatin sodium 20 MG Oral Tablet |
+| 3 | http://www.nlm.nih.gov/research/umls/rxnorm | 996740 | Memantine hydrochloride 2 MG/ML Oral Solution |
+| 3 | http://www.nlm.nih.gov/research/umls/rxnorm | 1014678 | cetirizine hydrochloride 10 MG Oral Tablet |
+| 2 | http://www.nlm.nih.gov/research/umls/rxnorm | 997501 | Fexofenadine hydrochloride 60 MG Oral Tablet |
+| 2 | http://www.nlm.nih.gov/research/umls/rxnorm | 617310 | atorvastatin 20 MG Oral Tablet |
+| 2 | http://www.nlm.nih.gov/research/umls/rxnorm | 197380 | atenolol 25 MG Oral Tablet |
+| 2 | http://www.nlm.nih.gov/research/umls/rxnorm | 979464 | hydrochlorothiazide 12.5 MG / losartan potassium 100 MG Oral Tablet |
+| 2 | http://www.nlm.nih.gov/research/umls/rxnorm | 313760 | zalcitabine 0.75 MG Oral Tablet |
+| 2 | http://www.nlm.nih.gov/research/umls/rxnorm | 200031 | carvedilol 6.25 MG Oral Tablet |
+| 2 | http://www.nlm.nih.gov/research/umls/rxnorm | 314231 | simvastatin 10 MG Oral Tablet |
+| 2 | http://www.nlm.nih.gov/research/umls/rxnorm | 310385 | FLUoxetine 20 MG Oral Capsule |
+| 2 | http://www.nlm.nih.gov/research/umls/rxnorm | 664741 | atazanavir 300 MG Oral Capsule |
+| 2 | http://www.nlm.nih.gov/research/umls/rxnorm | 317150 | ritonavir 100 MG Oral Capsule |
+| 2 | http://www.nlm.nih.gov/research/umls/rxnorm | 866427 | 24 HR metoprolol succinate 25 MG Extended Release Oral Tablet |
+| 2 | http://www.nlm.nih.gov/research/umls/rxnorm | 866436 | 24 HR metoprolol succinate 50 MG Extended Release Oral Tablet |
+| 2 | http://www.nlm.nih.gov/research/umls/rxnorm | 198211 | simvastatin 40 MG Oral Tablet |
+| 2 | http://www.nlm.nih.gov/research/umls/rxnorm | 979468 | hydrochlorothiazide 12.5 MG / losartan potassium 50 MG Oral Tablet |
+| 2 | http://www.nlm.nih.gov/research/umls/rxnorm | 105078 | Penicillin G 375 MG/ML Injectable Solution |
+| 2 | http://www.nlm.nih.gov/research/umls/rxnorm | 483438 | pregabalin 100 MG Oral Capsule |
+| 2 | http://www.nlm.nih.gov/research/umls/rxnorm | 997223 | Donepezil hydrochloride 10 MG Oral Tablet |
+| 1 | http://www.nlm.nih.gov/research/umls/rxnorm | 205326 | lisinopril 30 MG Oral Tablet |
+| 1 | http://www.nlm.nih.gov/research/umls/rxnorm | 476350 | ezetimibe 10 MG / simvastatin 40 MG Oral Tablet |
+| 1 | http://www.nlm.nih.gov/research/umls/rxnorm | 859751 | rosuvastatin calcium 20 MG Oral Tablet |
+| 1 | http://www.nlm.nih.gov/research/umls/rxnorm | 751623 | nebivolol 5 MG Oral Tablet [Bystolic] |
+| 1 | http://www.nlm.nih.gov/research/umls/rxnorm | 854905 | bisoprolol fumarate 5 MG Oral Tablet |
+| 1 | http://www.nlm.nih.gov/research/umls/rxnorm | 200096 | irbesartan 300 MG Oral Tablet |
+| 1 | http://www.nlm.nih.gov/research/umls/rxnorm | 197541 | Colchicine 0.6 MG Oral Tablet |
+| 1 | http://www.nlm.nih.gov/research/umls/rxnorm | 859749 | rosuvastatin calcium 10 MG Oral Tablet [Crestor] |
+| 1 | http://www.nlm.nih.gov/research/umls/rxnorm | 859424 | rosuvastatin calcium 5 MG Oral Tablet |
+| 1 | http://www.nlm.nih.gov/research/umls/rxnorm | 854916 | bisoprolol fumarate 2.5 MG / hydrochlorothiazide 6.25 MG Oral Tablet |
+| 1 | http://www.nlm.nih.gov/research/umls/rxnorm | 898723 | benazepril hydrochloride 5 MG Oral Tablet |
+| 1 | http://www.nlm.nih.gov/research/umls/rxnorm | 866511 | metoprolol tartrate 100 MG Oral Tablet |
+| 1 | http://www.nlm.nih.gov/research/umls/rxnorm | 854901 | bisoprolol fumarate 10 MG Oral Tablet |
+| 1 | http://www.nlm.nih.gov/research/umls/rxnorm | 197904 | lovastatin 20 MG Oral Tablet |
+| 1 | http://www.nlm.nih.gov/research/umls/rxnorm | 898687 | benazepril hydrochloride 10 MG Oral Tablet |
+| 1 | http://www.nlm.nih.gov/research/umls/rxnorm | 866514 | metoprolol tartrate 50 MG Oral Tablet |
+| 1 | http://www.nlm.nih.gov/research/umls/rxnorm | 789980 | Ampicillin 100 MG/ML Injectable Solution |
+| 1 | http://www.nlm.nih.gov/research/umls/rxnorm | 1363309 | Chlorpheniramine Maleate 4 MG Oral Tablet |
+| 1 | http://www.nlm.nih.gov/research/umls/rxnorm | 856457 | propranolol hydrochloride 20 MG Oral Tablet |
+| 1 | http://www.nlm.nih.gov/research/umls/rxnorm | 312961 | simvastatin 20 MG Oral Tablet |
+| 1 | http://www.nlm.nih.gov/research/umls/rxnorm | 311354 | lisinopril 5 MG Oral Tablet |
+| 1 | http://www.nlm.nih.gov/research/umls/rxnorm | 349199 | valsartan 80 MG Oral Tablet |
+| 1 | http://www.nlm.nih.gov/research/umls/rxnorm | 856519 | propranolol hydrochloride 40 MG Oral Tablet |
+| 1 | http://www.nlm.nih.gov/research/umls/rxnorm | 856448 | propranolol hydrochloride 10 MG Oral Tablet |
+| 1 | http://www.nlm.nih.gov/research/umls/rxnorm | 904458 | pravastatin sodium 10 MG Oral Tablet |
+| 1 | http://www.nlm.nih.gov/research/umls/rxnorm | 141962 | Azithromycin 250 MG Oral Capsule |
+| 1 | http://www.nlm.nih.gov/research/umls/rxnorm | 904481 | pravastatin sodium 80 MG Oral Tablet |
+| 1 | http://www.nlm.nih.gov/research/umls/rxnorm | 197905 | lovastatin 40 MG Oral Tablet |
+| 1 | http://www.nlm.nih.gov/research/umls/rxnorm | 808917 | fosfomycin 3000 MG Granules for Oral Solution |
+| 1 | http://www.nlm.nih.gov/research/umls/rxnorm | 105585 | Methotrexate 2.5 MG Oral Tablet |
+| 1 | http://www.nlm.nih.gov/research/umls/rxnorm | 833135 | Milnacipran hydrochloride 100 MG Oral Tablet |
+| 1 | http://www.nlm.nih.gov/research/umls/rxnorm | 904475 | pravastatin sodium 40 MG Oral Tablet |
+| 1 | http://www.nlm.nih.gov/research/umls/rxnorm | 200345 | simvastatin 80 MG Oral Tablet |
