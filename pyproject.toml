@@ -1,0 +1,65 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "previsit-agent"
+version = "0.1.0"
+description = "Pre-visit clinical intelligence agent over synthetic (Synthea) patient data — care-gap detection and documentation-completeness checking, not diagnosis or billing."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+
+dependencies = [
+    # config
+    "pydantic==2.13.4",
+    "pydantic-settings==2.15.0",
+    "python-dotenv==1.2.3",
+    # relational DB (Phase 2+)
+    "pyodbc==5.3.0",
+    "SQLAlchemy==2.0.52",
+    # vector store / embeddings (Phase 4)
+    "qdrant-client==1.19.0",
+    "sentence-transformers==6.0.0",
+    # agent framework (Phase 5)
+    "langgraph==1.2.11",
+    "langchain-core==1.6.0",
+    # LLM providers (Phase 5) — swappable, see src/previsit/llm/
+    "google-genai==2.19.0",
+    "groq==1.6.0",
+    "openai==3.3.1",           # also used for the Azure OpenAI client (unused by default)
+    # API layer (Phase 7)
+    "fastapi==0.141.1",
+    "uvicorn[standard]==0.52.4",
+    # MCP server (Phase 7)
+    "mcp[cli]==2.1.0",
+    # demo UI (Phase 7)
+    "streamlit==1.62.0",
+    # experiment tracking (Phase 6)
+    "mlflow==3.15.1",
+    # data wrangling (eval + ingest)
+    "pandas==3.0.5",
+    "numpy==2.4.6",
+    "httpx==0.28.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest==9.1.1",
+    "pytest-cov==7.1.0",
+    "ruff==0.16.4",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/previsit"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
