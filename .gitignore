@@ -6,6 +6,7 @@ venv/
 # Synthetic data output (regenerated, never committed)
 data/synthea_output/
 data/synthea/
+.synthea_cache/
 
 # Python
 __pycache__/
@@ -29,6 +30,7 @@ eval/results/*
 # IDE
 .vscode/
 .idea/
+.claude/
 
 # OS
 .DS_Store
