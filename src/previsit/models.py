@@ -8,6 +8,18 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 
+class NoteChunk(BaseModel):
+    """One chunk of a clinical note, as returned by search_notes.
+    `score` is the vector-similarity score - None when this represents a
+    chunk outside of a search context."""
+
+    patient_id: str
+    source_resource_id: str
+    chunk_index: int
+    text: str
+    score: float | None = None
+
+
 class Gap(BaseModel):
     """One care-gap finding, as produced by a sql/gaps/*.sql rule.
 
