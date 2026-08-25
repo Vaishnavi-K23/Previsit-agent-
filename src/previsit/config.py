@@ -34,7 +34,7 @@ class Settings(BaseSettings):
     azure_openai_api_version: str = ""
 
     # MLflow
-    mlflow_tracking_uri: str = "./mlruns"
+    mlflow_tracking_uri: str = "sqlite:///mlruns.db"
 
     # Synthea
     synthea_population: int = 1000

@@ -49,6 +49,7 @@ class AgentState(TypedDict, total=False):
     raw_findings: list[dict]
     one_line_summary: str
     hallucination_count: int
+    rejected_findings: list[dict]
     card: PreVisitCard
 
 
@@ -218,7 +219,11 @@ def apply_guardrail(state: AgentState) -> dict:
         generated_at=datetime.utcnow(),
         model_used=state.get("model_name", "unknown"),
     )
-    return {"card": card, "hallucination_count": result.hallucination_count}
+    return {
+        "card": card,
+        "hallucination_count": result.hallucination_count,
+        "rejected_findings": [{"raw": r.raw, "reason": r.reason} for r in result.rejected],
+    }
 
 
 def build_graph():

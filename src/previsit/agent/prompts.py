@@ -5,6 +5,13 @@ thresholds are all decided before the LLM ever sees the data (Phase 3);
 this prompt exists to keep the LLM from adding anything on top of that.
 """
 
+# Bump whenever SYSTEM_PROMPT or the maybe_search_notes/compose_card human
+# messages in agent/graph.py change materially - logged as an MLflow param
+# on every eval run (eval/run_eval.py) so a metrics shift can be traced back
+# to a specific prompt revision. v2: fixed maybe_search_notes letting the
+# model draft the whole card instead of making a narrow tool/no-tool call.
+PROMPT_VERSION = "v2"
+
 SYSTEM_PROMPT = """\
 You are a clinical documentation assistant. You prepare a "pre-visit card" \
 that a clinic staff member reads in about 15 seconds before a provider \
