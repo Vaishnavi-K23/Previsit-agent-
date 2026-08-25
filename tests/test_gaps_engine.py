@@ -88,8 +88,22 @@ def _insert_observation(engine, patient_id: str, code: str, value: float, effect
     return source_id
 
 
-def _gap_codes(engine, patient_id):
-    return {g.gap_code for g in check_care_gaps(engine, patient_id=patient_id, as_of=AS_OF)}
+def _insert_medication(engine, patient_id: str, code: str, status: str = "active") -> str:
+    source_id = f"med-{uuid.uuid4()}"
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "INSERT INTO fact_medication "
+                "(patient_id, source_resource_id, code_system, code, display, status) "
+                "VALUES (:pid, :sid, 'http://www.nlm.nih.gov/research/umls/rxnorm', :code, 'test med', :status)"
+            ),
+            {"pid": patient_id, "sid": source_id, "code": code, "status": status},
+        )
+    return source_id
+
+
+def _gap_codes(engine, patient_id, as_of=None):
+    return {g.gap_code for g in check_care_gaps(engine, patient_id=patient_id, as_of=as_of or AS_OF)}
 
 
 # --- exactly 12 months (A1c not tested) -------------------------------------
@@ -197,3 +211,104 @@ def test_a1c_just_under_8_0_is_not_uncontrolled(engine, patient_id, cleanup):
     _insert_observation(engine, patient_id, "4548-4", 7.9, AS_OF)
 
     assert "A1C_UNCONTROLLED" not in _gap_codes(engine, patient_id)
+
+
+# --- broadened diabetic cohort (condition-complication and medication arms) -
+
+
+def test_complication_code_alone_counts_as_diabetic(engine, patient_id, cleanup):
+    """No base 44054006 diagnosis at all - only a complication code - must
+    still count as diabetic. This is the real-world case: 84 patients in the
+    live dataset have this exact shape."""
+    _insert_patient(engine, patient_id, date(1970, 1, 1))
+    _insert_condition(engine, patient_id, "127013003")  # kidney disorder due to diabetes
+
+    assert "A1C_NOT_TESTED" in _gap_codes(engine, patient_id)
+
+
+def test_prediabetes_alone_does_not_count_as_diabetic(engine, patient_id, cleanup):
+    """714628002 is explicitly excluded - a prediabetic patient has not
+    crossed the diagnostic threshold and must not trigger diabetes-gated gaps."""
+    _insert_patient(engine, patient_id, date(1970, 1, 1))
+    _insert_condition(engine, patient_id, "714628002")  # Prediabetes (finding)
+
+    assert "A1C_NOT_TESTED" not in _gap_codes(engine, patient_id)
+    assert "STATIN_GAP" not in _gap_codes(engine, patient_id)
+
+
+def test_active_insulin_alone_counts_as_diabetic(engine, patient_id, cleanup):
+    """No condition coded at all - only an active insulin prescription -
+    must still count as diabetic."""
+    _insert_patient(engine, patient_id, date(1970, 1, 1))
+    _insert_medication(engine, patient_id, "106892")  # insulin isophane/regular [Humulin]
+
+    assert "A1C_NOT_TESTED" in _gap_codes(engine, patient_id)
+
+
+def test_stopped_insulin_does_not_count_as_diabetic(engine, patient_id, cleanup):
+    """A non-active insulin record is not current evidence of diabetes -
+    mirrors how a resolved condition doesn't count either."""
+    _insert_patient(engine, patient_id, date(1970, 1, 1))
+    _insert_medication(engine, patient_id, "106892", status="completed")
+
+    assert "A1C_NOT_TESTED" not in _gap_codes(engine, patient_id)
+
+
+# --- influenza grace period (Aug 1 - Oct 31, flagging starts Nov 1) ---------
+
+
+def test_no_flu_shot_during_grace_period_is_not_flagged(engine, patient_id, cleanup):
+    """Mid-September, well within the Aug 1 - Oct 31 grace window, with no
+    shot yet on record at all - must NOT be flagged. This is the case that
+    was producing an 81% population-wide false-positive rate under the old
+    hard Aug-1-cutoff rule."""
+    _insert_patient(engine, patient_id, date(1970, 1, 1))
+    mid_september = datetime(2026, 9, 15)
+
+    assert "INFLUENZA_VACCINATION_OVERDUE" not in _gap_codes(engine, patient_id, as_of=mid_september)
+
+
+def test_no_flu_shot_on_nov_1_is_flagged(engine, patient_id, cleanup):
+    """Grace period has just ended - no shot on record - now it's a real gap."""
+    _insert_patient(engine, patient_id, date(1970, 1, 1))
+    nov_1 = datetime(2026, 11, 1)
+
+    assert "INFLUENZA_VACCINATION_OVERDUE" in _gap_codes(engine, patient_id, as_of=nov_1)
+
+
+def test_flu_shot_since_season_start_is_not_flagged_after_grace_period(engine, patient_id, cleanup):
+    """Got the shot back in September, well before the Nov 1 grace-period
+    cutoff - not overdue, regardless of how late in the season it now is."""
+    _insert_patient(engine, patient_id, date(1970, 1, 1))
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "INSERT INTO fact_immunization "
+                "(patient_id, source_resource_id, code_system, code, display, occurrence_datetime) "
+                "VALUES (:pid, :sid, 'http://hl7.org/fhir/sid/cvx', '140', 'test flu shot', :dt)"
+            ),
+            {"pid": patient_id, "sid": f"imm-{uuid.uuid4()}", "dt": datetime(2026, 9, 1)},
+        )
+    december = datetime(2026, 12, 15)
+
+    assert "INFLUENZA_VACCINATION_OVERDUE" not in _gap_codes(engine, patient_id, as_of=december)
+
+
+def test_flu_shot_from_prior_season_does_not_satisfy_current_season(engine, patient_id, cleanup):
+    """A shot from last season (e.g. the previous October) doesn't count
+    toward this season's requirement, even though it's within the last 12
+    months - this is exactly why the rule uses a season boundary, not a
+    rolling window."""
+    _insert_patient(engine, patient_id, date(1970, 1, 1))
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "INSERT INTO fact_immunization "
+                "(patient_id, source_resource_id, code_system, code, display, occurrence_datetime) "
+                "VALUES (:pid, :sid, 'http://hl7.org/fhir/sid/cvx', '140', 'test flu shot', :dt)"
+            ),
+            {"pid": patient_id, "sid": f"imm-{uuid.uuid4()}", "dt": datetime(2025, 10, 15)},
+        )
+    nov_2026 = datetime(2026, 11, 15)
+
+    assert "INFLUENZA_VACCINATION_OVERDUE" in _gap_codes(engine, patient_id, as_of=nov_2026)
