@@ -44,26 +44,62 @@ None - all 1175 patients' gap sets matched exactly between the two independent i
 
 <!-- DETERMINISTIC_SECTION:END -->
 
+<!-- MUTATION_SECTION:START -->
+
+## Mutation testing (does a broken engine actually fail this check?)
+
+Generated 2026-08-25T20:00:59.126873Z by `python -m eval.mutation_test_deterministic`. The 100% agreement result above is only meaningful if a broken engine would score below 100% - otherwise the check could be passing because it isn't exercising the rule logic, not because the logic is correct. Each mutation below introduces one realistic, targeted break into a real `sql/gaps/*.sql` file, re-runs the deterministic comparison, and confirms `eval/ground_truth.py`'s independent implementation catches it - then reverts the file exactly before the next mutation runs (verified byte-for-byte, in a try/finally so a crash mid-mutation can't leave the repo broken). Baseline before mutating: 100.0% recall, 100.0% precision, 1175 patients, 0 discrepancies.
+
+| Mutation | Caught? | Discrepancies | Recall | Precision |
+|---|---|---|---|---|
+| lookback_window_off_by_one_month | Yes | 3 | 100.0% | 99.5% |
+| comparison_operator_flipped | Yes | 160 | 98.3% | 79.1% |
+| diabetes_complication_code_dropped | **NO - not caught** | 0 | 100.0% | 100.0% |
+
+**lookback_window_off_by_one_month** (`01_a1c_not_tested.sql`): A1C_NOT_TESTED's 12-month HbA1c lookback window narrowed to 11 months - a patient tested 11-12 months ago would now be wrongly flagged as overdue by the engine.
+
+- 98cfffd6-f33b-5bfd-0721-d9b12de391b3: ground truth ['DIABETIC_EYE_EXAM_OVERDUE'], mutated engine ['A1C_NOT_TESTED', 'DIABETIC_EYE_EXAM_OVERDUE']
+- 16f07d04-e53c-70c9-b3a8-0797492a4b14: ground truth ['BP_UNCONTROLLED', 'DIABETIC_EYE_EXAM_OVERDUE'], mutated engine ['A1C_NOT_TESTED', 'BP_UNCONTROLLED', 'DIABETIC_EYE_EXAM_OVERDUE']
+- 884f1dd3-3944-992f-c1a0-d7c0ae150ef8: ground truth ['STATIN_GAP'], mutated engine ['A1C_NOT_TESTED', 'STATIN_GAP']
+
+**comparison_operator_flipped** (`04_bp_uncontrolled.sql`): BP_UNCONTROLLED's threshold comparison inverted (>= became <) - the rule would now flag well-controlled blood pressure as uncontrolled and vice versa for every patient with a hypertension diagnosis and a BP reading.
+
+- f4a72b5a-ce90-a6a0-2e55-b6a9aaadab29: ground truth ['DIABETIC_EYE_EXAM_OVERDUE'], mutated engine ['BP_UNCONTROLLED', 'DIABETIC_EYE_EXAM_OVERDUE']
+- b6096819-2f79-bbe8-6791-8c76c5d0b08d: ground truth [], mutated engine ['BP_UNCONTROLLED']
+- cfc358a2-cf03-b196-bcc8-60ddf2ea9716: ground truth ['BREAST_CANCER_SCREENING_OVERDUE', 'DIABETIC_EYE_EXAM_OVERDUE'], mutated engine ['BP_UNCONTROLLED', 'BREAST_CANCER_SCREENING_OVERDUE', 'DIABETIC_EYE_EXAM_OVERDUE']
+- 461eb375-b781-3638-2ce5-f5a1d9611bc4: ground truth ['BP_UNCONTROLLED', 'BREAST_CANCER_SCREENING_OVERDUE'], mutated engine ['BREAST_CANCER_SCREENING_OVERDUE']
+- a2654f00-0a77-d47c-1c46-886b51edfffd: ground truth [], mutated engine ['BP_UNCONTROLLED']
+
+**diabetes_complication_code_dropped** (`07_statin_gap.sql`): STATIN_GAP's diabetic-cohort definition silently dropped SNOMED 368581000119106 (diabetic neuropathy) from the complication code list - a patient diabetic only by virtue of that code (no base diagnosis, no other complication, no active insulin) would no longer be recognized as diabetic at all by this rule.
+
+Investigated: 0 patients in this dataset have SNOMED 368581000119106 as their ONLY diabetes-qualifying evidence - every patient carrying it also has the base diagnosis, another complication code, or active insulin, so removing it from one rule's list changes nothing for anyone. This is a dataset-redundancy artifact, not a gap in the check's sensitivity: mutating a value that happens to be fully redundant in the current Synthea generation can't produce a detectable difference no matter how correct the detection logic is. A hand-built fixture patient (analogous to eval/fixtures/) whose only diabetes evidence is this one code would close this specific coverage gap.
+
+**2 of 3 mutations caught.** Not summarized away: 1 missed.
+1 of the misses were investigated and traced to dataset redundancy (see above) - the mutated value never happens to be load-bearing for any real patient in the current Synthea generation, so no discrepancy was possible regardless of check sensitivity. Still a real coverage gap worth closing with a targeted fixture, just not evidence the check itself is broken.
+
+Post-mutation-testing re-check: engine restored cleanly, 0 discrepancies.
+
+<!-- MUTATION_SECTION:END -->
+
 <!-- AGENT_SECTION:START -->
 
 ## Agent-level metrics (live LLM runs)
 
-Model `gemini-3.6-flash` (provider `gemini`), prompt `v2`, rules `v1`. These four metrics genuinely require a live agent turn - gap recall/precision do not (see the Deterministic section above) and are scored there instead, for free, across the full population.
+Model `openai/gpt-oss-120b` (provider `groq`), prompt `v3`, rules `v1`. These four metrics genuinely require a live agent turn - gap recall/precision do not (see the Deterministic section above) and are scored there instead, for free, across the full population.
 
 **Multi-day accumulation methodology:** free-tier daily quotas (Gemini: 20 requests/day; Groq `openai/gpt-oss-120b`: 200,000 tokens/day, ~8-15 patients through this multi-call agent) fall far short of the >=100-patient target in a single day. `eval/run_eval.py --resume` checkpoints every patient's result to disk immediately on completion (`--checkpoint-path`, default `eval/results/checkpoint.json`); re-running the identical command on a later day skips patients that already succeeded and retries ones that previously errored, so quota exhaustion costs at most the in-flight patient, never prior days' work. The table below accumulates over however many `--resume` sessions it took to reach the patient count shown - this is a deliberate, documented constraint of running on free-tier infrastructure, not something to paper over.
 
 | Metric | Value |
 |---|---|
-| Hallucination rate (uncited/fabricated claims) | 0.0% (0/11 findings) |
-| Schema violation rate (real, cited claim; invalid field) | 9.1% (1/11 findings) |
+| Hallucination rate (uncited/fabricated claims) | 0.0% (0/9 findings) |
+| Schema violation rate (real, cited claim; invalid field, rejected) | 0.0% (0/9 findings) |
+| Severity coercion rate (near-miss value corrected, accepted) | 0.0% (0/9 findings) |
 | Citation validity | 100.0% |
 | Patient leakage | 0 (must be 0) |
-| Latency p50 | 25.97s |
-| Latency p95 | 50.91s |
-| Patients completed | 5 (target >=100  - still accumulating) |
-| Patients errored this checkpoint | 0 |
-
-> **Known limitation: p95 latency (50.9s) is too slow for point-of-care use.** A clinician pulling up a chart shouldn't wait over a minute for the card to render. A production design would render the deterministic care gaps immediately (they're a plain SQL query - no LLM latency at all) and fill in the LLM-generated narrative/summary asynchronously once it's ready, rather than blocking the whole card on the slowest part of the pipeline.
+| Latency p50 | 5.48s |
+| Latency p95 | 6.30s |
+| Patients completed | 2 (target >=100  - still accumulating) |
+| Patients errored this checkpoint | 3 |
 
 **A project reporting 100% on everything reads as untested - the failures below are real, not curated for effect.**
 
@@ -73,11 +109,13 @@ None in this run - every finding the LLM proposed cited a real record for this p
 
 ### Failure examples: schema violations (real, cited claim; invalid field)
 
-- **51c2712d-db35-08ab-2902-5d4accc945ea**: 1 of 1 raw findings rejected for a schema violation.
-  - `'Recent ambulatory encounter for check up on 2026-05-12.'` — rejected: failed schema validation: 1 validation error for Finding
-severity
-  Input should be 'high', 'medium' or 'low' [type=literal_error, input_value='info', input_type=str]
-    For further information visit https://errors.pydantic.dev/2.13/v/literal_error
+None in this run - every accepted finding's fields matched the Finding schema.
+
+### Severity coercions (near-miss value corrected, not rejected)
+
+Not a failure - these findings were accepted, with a known synonym (e.g. `'info'`, `'moderate'`) normalized to the exact enum value before validation (see guardrails.py's `_SEVERITY_SYNONYMS`). Tracked separately to show how often correction was still needed even after PROMPT_VERSION v3 spelled out the three allowed values explicitly.
+
+None in this run - every accepted finding used an exact enum value with no correction needed.
 
 ### Failure examples: cross-patient citation leakage
 
@@ -85,7 +123,9 @@ None in this run - 0 leaked citations across all raw findings, every run.
 
 ### Errors (patient processing failed outright)
 
-None in this checkpoint.
+- **208e43c2-6f0f-f18d-1ed9-92d011f752c0**: `RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit reached for model `openai/gpt-oss-120b` in organization `org_01kjvje6g8e9p8fffc297v49cs` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 198792, Requested 1862. Please try again in 4m42.528s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing', 'type': 'tokens', 'code': 'rate_limit_exceeded'}}`
+- **51c2712d-db35-08ab-2902-5d4accc945ea**: `RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit reached for model `openai/gpt-oss-120b` in organization `org_01kjvje6g8e9p8fffc297v49cs` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 198790, Requested 1381. Please try again in 1m13.872s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing', 'type': 'tokens', 'code': 'rate_limit_exceeded'}}`
+- **3e48359d-5c63-25ca-60d4-71088c18aae6**: `RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit reached for model `openai/gpt-oss-120b` in organization `org_01kjvje6g8e9p8fffc297v49cs` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 198788, Requested 1635. Please try again in 3m2.736s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing', 'type': 'tokens', 'code': 'rate_limit_exceeded'}}`
 
 ## Background: why this eval needed hand-built fixtures, not just the main dataset
 
@@ -95,7 +135,13 @@ None in this checkpoint.
 
 ## Historical: initial validation run on Groq (2026-08-25)
 
-Before this harness had `--resume`/checkpointing, a one-shot 120-patient run was attempted against Gemini's free tier and immediately hit its 20-requests/day cap. Groq (`openai/gpt-oss-120b`) was substituted for that single run only - never the interactive agent's pinned default - and hit its own free-tier ceiling instead: a 200,000-tokens/day cap, exhausted after just 8 of 120 patients (compounded by an earlier crashed attempt on the same UTC day - a Windows console encoding bug, also fixed since, that took the whole run down on a `print()` before results could be saved). On the 8 patients that did complete: 0/21 true hallucinations, 3/21 schema violations (all an out-of-enum `severity` value - `'moderate'` or `'informational'`), 100% citation validity, 0 leakage. That 3/21 schema violation rate is the reason this file distinguishes schema_violation_rate from hallucination_rate at all - conflating them would have reported a 14.3% "hallucination rate" for a run with zero actual hallucinations. The same failure mode (an out-of-enum severity value, `'info'` this time) recurred on the very first Gemini batch after `--resume` was built, on a different provider entirely - see the Failure examples above. That's convergent evidence across two unrelated models, not a Groq-specific quirk: `SYSTEM_PROMPT`'s severity instructions are underspecified enough that models drift to plausible-sounding synonyms instead of the exact enum. Worth tightening the prompt to enumerate the three allowed values explicitly, independent of which provider is in use.
+Before this harness had `--resume`/checkpointing, a one-shot 120-patient run was attempted against Gemini's free tier and immediately hit its 20-requests/day cap. Groq (`openai/gpt-oss-120b`) was substituted for that single run only - never the interactive agent's pinned default - and hit its own free-tier ceiling instead: a 200,000-tokens/day cap, exhausted after just 8 of 120 patients (compounded by an earlier crashed attempt on the same UTC day - a Windows console encoding bug, also fixed since, that took the whole run down on a `print()` before results could be saved). On the 8 patients that did complete: 0/21 true hallucinations, 3/21 schema violations (all an out-of-enum `severity` value - `'moderate'` or `'informational'`), 100% citation validity, 0 leakage. That 3/21 schema violation rate is the reason this file distinguishes schema_violation_rate from hallucination_rate at all - conflating them would have reported a 14.3% "hallucination rate" for a run with zero actual hallucinations. The same failure mode recurred on the very first Gemini batch after `--resume` was built, on a different provider entirely: patient 51c2712d-db35-08ab-2902-5d4accc945ea's card proposed `'Recent ambulatory encounter for check up on 2026-05-12.'` with `severity='info'` - rejected by the same schema-validation check, same root cause, different model (1/11 findings on that 5-patient Gemini batch). That's convergent evidence across two unrelated models, not a Groq-specific quirk: `SYSTEM_PROMPT`'s severity instructions were underspecified enough that models drift to plausible-sounding synonyms instead of the exact enum. See "Closing the severity loop" below for the fix.
+
+## Closing the severity loop (PROMPT_VERSION v3)
+
+Two changes, not just a flag raised: `SYSTEM_PROMPT` now spells out the exact three allowed severity values with concrete mapping guidance for recent_event (the one field the model has to invent rather than copy from a tool), and `guardrails.py` now normalizes known near-miss synonyms (`'info'`/`'informational'` -> low, `'moderate'`/`'warning'` -> medium, `'urgent'`/`'critical'` -> high, etc.) before validation, logging every coercion rather than either silently accepting or rejecting a finding whose citation and clinical content were both fine. Unmapped values still fail validation and are rejected as schema violations, not guessed at.
+
+The Agent-level metrics table above (prompt `v3`) is the first data point under this fix: 2 patients completed against Groq before hitting the same 200,000-tokens/day wall again (the earlier runs today had already spent most of it), and on those 2, 0 of 9 raw findings needed either coercion or rejection - zero severity issues of any kind, versus 3/21 schema violations pre-fix on the same model. That is a real, positive signal, but n=2 is nowhere near enough to claim the violation rate has genuinely dropped with statistical confidence - it needs the same multi-day `--resume` accumulation as every other agent-level metric before that claim can be made properly. MLflow's `prompt_version` parameter makes the v2-vs-v3 comparison queryable once enough v3 data exists on the same provider.
 
 
 <!-- AGENT_SECTION:END -->

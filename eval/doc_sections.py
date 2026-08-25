@@ -14,6 +14,9 @@ DETERMINISTIC_END = "<!-- DETERMINISTIC_SECTION:END -->"
 AGENT_START = "<!-- AGENT_SECTION:START -->"
 AGENT_END = "<!-- AGENT_SECTION:END -->"
 
+MUTATION_START = "<!-- MUTATION_SECTION:START -->"
+MUTATION_END = "<!-- MUTATION_SECTION:END -->"
+
 
 def extract_section(doc_text: str, start_marker: str, end_marker: str) -> str | None:
     start = doc_text.find(start_marker)
