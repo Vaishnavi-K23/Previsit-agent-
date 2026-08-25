@@ -22,11 +22,21 @@ from previsit.ingest.loader import get_engine
 FIXTURES_DIR = Path(__file__).resolve().parents[1] / "eval" / "fixtures"
 AS_OF = datetime(2026, 8, 25, 12, 0, 0)
 
-FIXTURE_FILES = [
-    "fixture_a1c_92_last_month.json",
-    "fixture_mammogram_exactly_27mo.json",
-    "fixture_just_turned_40.json",
-]
+# filename -> list of as_of instants to check that fixture at. Boundary
+# fixtures are checked on both sides of their cutoff, so the cross-check
+# actually exercises the direction of the boundary, not just one side of it.
+FIXTURE_AS_OF_CASES: dict[str, list[datetime]] = {
+    "fixture_a1c_92_last_month.json": [AS_OF],
+    "fixture_mammogram_exactly_27mo.json": [AS_OF, datetime(2026, 8, 26, 12, 0, 0)],
+    "fixture_just_turned_40.json": [AS_OF, datetime(2026, 8, 24, 12, 0, 0)],
+    "fixture_flu_grace_boundary.json": [
+        datetime(2026, 10, 31, 23, 59, 59),
+        datetime(2026, 11, 1, 0, 0, 0),
+    ],
+    "fixture_colorectal_exact_10yr.json": [AS_OF, datetime(2026, 8, 26, 12, 0, 0)],
+    "fixture_statin_upper_age_boundary.json": [AS_OF, datetime(2026, 8, 24, 12, 0, 0)],
+    "fixture_bp_uncontrolled_exact_threshold.json": [AS_OF],
+}
 
 
 def _load_fixture_into_sql(engine, bundle: dict) -> str:
@@ -96,24 +106,24 @@ def _cleanup(engine, patient_id: str) -> None:
 def test_all_fixtures_agree_between_ground_truth_and_sql_engine():
     engine = get_engine()
 
-    for filename in FIXTURE_FILES:
+    for filename, as_of_cases in FIXTURE_AS_OF_CASES.items():
         bundle = load_bundle(FIXTURES_DIR / filename)
-
         gt_data = parse_bundle(bundle)
         assert gt_data is not None
-        ground_truth_codes = compute_ground_truth(gt_data, AS_OF)
 
         patient_id = _load_fixture_into_sql(engine, bundle)
         try:
-            sql_gaps = check_care_gaps(engine, patient_id=patient_id, as_of=AS_OF)
-            sql_codes = {g.gap_code for g in sql_gaps}
+            for as_of in as_of_cases:
+                ground_truth_codes = compute_ground_truth(gt_data, as_of)
+                sql_gaps = check_care_gaps(engine, patient_id=patient_id, as_of=as_of)
+                sql_codes = {g.gap_code for g in sql_gaps}
 
-            assert sql_codes == ground_truth_codes, (
-                f"{filename}: SQL engine and ground truth disagree.\n"
-                f"  SQL engine:    {sorted(sql_codes)}\n"
-                f"  Ground truth:  {sorted(ground_truth_codes)}\n"
-                f"  SQL only:      {sorted(sql_codes - ground_truth_codes)}\n"
-                f"  Truth only:    {sorted(ground_truth_codes - sql_codes)}"
-            )
+                assert sql_codes == ground_truth_codes, (
+                    f"{filename} @ {as_of}: SQL engine and ground truth disagree.\n"
+                    f"  SQL engine:    {sorted(sql_codes)}\n"
+                    f"  Ground truth:  {sorted(ground_truth_codes)}\n"
+                    f"  SQL only:      {sorted(sql_codes - ground_truth_codes)}\n"
+                    f"  Truth only:    {sorted(ground_truth_codes - sql_codes)}"
+                )
         finally:
             _cleanup(engine, patient_id)

@@ -1,0 +1,25 @@
+{
+  "resourceType": "Bundle",
+  "type": "collection",
+  "entry": [
+    {
+      "resource": {
+        "resourceType": "Patient",
+        "id": "fixture-colorectal-exact-10yr",
+        "birthDate": "1976-01-01",
+        "gender": "male",
+        "address": [{"city": "Fixture City", "state": "AZ", "postalCode": "00000"}]
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Procedure",
+        "id": "fixture-colorectal-exact-10yr-colonoscopy",
+        "status": "completed",
+        "code": {"coding": [{"system": "http://snomed.info/sct", "code": "73761001", "display": "Colonoscopy (procedure)"}]},
+        "subject": {"reference": "urn:uuid:fixture-colorectal-exact-10yr"},
+        "performedPeriod": {"start": "2016-08-25T12:00:00", "end": "2016-08-25T13:00:00"}
+      }
+    }
+  ]
+}

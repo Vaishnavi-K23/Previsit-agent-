@@ -132,6 +132,91 @@ def test_fixture_39_years_364_days_excludes_age_gated_rules():
     assert "STATIN_GAP" not in truth
 
 
+# --- Fixture 4: influenza grace boundary, both sides -------------------------
+
+
+def test_fixture_flu_within_grace_period_not_flagged():
+    bundle = load_bundle(FIXTURES_DIR / "fixture_flu_grace_boundary.json")
+    data = parse_bundle(bundle)
+    assert data is not None
+    just_before_flagging = datetime(2026, 10, 31, 23, 59, 59)
+    assert compute_ground_truth(data, just_before_flagging) == set()
+
+
+def test_fixture_flu_at_flagging_boundary_is_flagged():
+    bundle = load_bundle(FIXTURES_DIR / "fixture_flu_grace_boundary.json")
+    data = parse_bundle(bundle)
+    assert data is not None
+    at_flagging = datetime(2026, 11, 1, 0, 0, 0)
+    assert compute_ground_truth(data, at_flagging) == {"INFLUENZA_VACCINATION_OVERDUE"}
+
+
+# --- Fixture 5: colorectal exact 10-year colonoscopy boundary ----------------
+
+
+def test_fixture_colorectal_exactly_10_years_is_not_overdue():
+    truth = _truth_for_fixture("fixture_colorectal_exact_10yr.json")
+    assert truth == set()
+
+
+def test_fixture_colorectal_one_day_past_10_years_is_overdue():
+    bundle = load_bundle(FIXTURES_DIR / "fixture_colorectal_exact_10yr.json")
+    data = parse_bundle(bundle)
+    assert data is not None
+    one_day_later = datetime(2026, 8, 26, 12, 0, 0)
+    assert compute_ground_truth(data, one_day_later) == {"COLORECTAL_SCREENING_OVERDUE"}
+
+
+# --- Fixture 6: statin gap upper age bound (75 -> 76) ------------------------
+
+
+def test_fixture_statin_age_76_excludes_statin_and_colorectal():
+    truth = _truth_for_fixture("fixture_statin_upper_age_boundary.json")
+    # Turns 76 today - above both the statin (40-75) and colorectal (45-75)
+    # upper bounds. Still diabetic with nothing ever tested/examined, so
+    # those two gaps are real and expected.
+    assert truth == {"A1C_NOT_TESTED", "DIABETIC_EYE_EXAM_OVERDUE"}
+    assert "STATIN_GAP" not in truth
+    assert "COLORECTAL_SCREENING_OVERDUE" not in truth
+
+
+def test_fixture_statin_age_75_includes_statin_and_colorectal():
+    bundle = load_bundle(FIXTURES_DIR / "fixture_statin_upper_age_boundary.json")
+    data = parse_bundle(bundle)
+    assert data is not None
+    one_day_early = datetime(2026, 8, 24, 12, 0, 0)  # still 75
+    truth = compute_ground_truth(data, one_day_early)
+    assert truth == {
+        "A1C_NOT_TESTED",
+        "DIABETIC_EYE_EXAM_OVERDUE",
+        "STATIN_GAP",
+        "COLORECTAL_SCREENING_OVERDUE",
+    }
+
+
+# --- Fixture 7: BP uncontrolled at the exact systolic threshold -------------
+
+
+def test_fixture_bp_systolic_exactly_140_is_uncontrolled():
+    truth = _truth_for_fixture("fixture_bp_uncontrolled_exact_threshold.json")
+    assert truth == {"BP_UNCONTROLLED"}
+
+
+def test_fixture_bp_below_threshold_is_not_uncontrolled():
+    """Same fixture, value mutated down by 1 on both readings - proves the
+    exact-140 case above is doing real boundary work, not just always firing
+    for this patient regardless of value."""
+    bundle = load_bundle(FIXTURES_DIR / "fixture_bp_uncontrolled_exact_threshold.json")
+    data = parse_bundle(bundle)
+    assert data is not None
+    for obs in data.observations:
+        if obs.code == "8480-6":
+            obs.value_numeric = 139
+        elif obs.code == "8462-4":
+            obs.value_numeric = 85
+    assert compute_ground_truth(data, AS_OF) == set()
+
+
 # --- Sanity: all 8 rules are wired up ----------------------------------------
 
 

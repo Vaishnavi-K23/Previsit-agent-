@@ -1,0 +1,15 @@
+{
+  "resourceType": "Bundle",
+  "type": "collection",
+  "entry": [
+    {
+      "resource": {
+        "resourceType": "Patient",
+        "id": "fixture-flu-grace-boundary",
+        "birthDate": "1996-01-01",
+        "gender": "male",
+        "address": [{"city": "Fixture City", "state": "AZ", "postalCode": "00000"}]
+      }
+    }
+  ]
+}
