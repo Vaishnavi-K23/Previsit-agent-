@@ -31,6 +31,70 @@ python -m previsit.healthcheck
 
 Expected output: a green `[OK]` line for both `SQL Server` and `Qdrant`.
 
+## Phase 7 — Interfaces
+
+Three ways to use the agent once Phases 0-5 are set up (Docker services running,
+`.venv` active, ingest done). All three call the exact same LangGraph agent
+(`previsit.agent.graph.generate_previsit_card`) - no duplicated logic between them.
+
+### FastAPI
+
+```bash
+uvicorn previsit.api.main:app --reload
+```
+
+Open http://127.0.0.1:8000/docs for interactive OpenAPI docs. Endpoints:
+`GET /health`, `GET /patients`, `GET /patients/{id}/card`,
+`POST /patients/{id}/card/refresh`.
+
+### MCP server — try the tools from Claude Code or Cursor
+
+Exposes the same five deterministic tools the agent calls internally
+(`get_patient_summary`, `check_care_gaps`, `get_recent_encounters`,
+`find_documentation_gaps`, `search_patient_notes`) directly to any MCP client.
+
+Run it standalone to confirm it starts:
+
+```bash
+python -m previsit.mcp_server.server
+```
+
+To add it to **Claude Code**, from this repo's root:
+
+```bash
+claude mcp add previsit-agent -- python -m previsit.mcp_server.server
+```
+
+Or to **Cursor** / any client that reads a `mcp.json`, add:
+
+```json
+{
+  "mcpServers": {
+    "previsit-agent": {
+      "command": "python",
+      "args": ["-m", "previsit.mcp_server.server"],
+      "cwd": "/absolute/path/to/this/repo"
+    }
+  }
+}
+```
+
+Once connected, ask your assistant something like *"check care gaps for
+patient `<id>` from the previsit-agent tools"* - `<id>` comes from
+`GET /patients` or the Streamlit picker below.
+
+### Streamlit demo UI
+
+```bash
+streamlit run src/previsit/streamlit_app.py
+```
+
+Pick a patient, click **Generate / refresh card**, then expand any
+citation under a finding - it re-fetches and displays the exact database
+row the claim is based on. That's the whole point of the citation
+guardrail made visible: every claim on the card traces back to a specific,
+inspectable record, never an invented one.
+
 ## Known limitations (early notes, expanded in Phase 8)
 
 - **The LLM is pinned to `gemini-3.6-flash`, deliberately, not the latest
