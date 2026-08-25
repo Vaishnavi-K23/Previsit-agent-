@@ -119,7 +119,12 @@ def run_deterministic_check(engine, fhir_dir: Path, as_of: datetime) -> Determin
         f"{result.n_loaded_not_evaluated} loaded-not-evaluated != {result.n_dim_patient} in dim_patient"
     )
 
-    for patient_id in evaluated_ids:
+    # Sorted, not raw set iteration - a plain `for patient_id in evaluated_ids`
+    # depends on Python's per-process string hash randomization, which
+    # doesn't change the totals below but silently reorders which patients
+    # end up in discrepancies[:5] (and every other list here) between runs -
+    # a report's example cases should be stable, not a coin flip of PYTHONHASHSEED.
+    for patient_id in sorted(evaluated_ids):
         truth = ground_truth[patient_id]
         predicted = engine_by_patient[patient_id]
 

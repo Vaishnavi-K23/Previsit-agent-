@@ -85,9 +85,57 @@ Post-mutation-testing re-check: engine restored cleanly, 0 discrepancies.
 
 ## Agent-level metrics (live LLM runs)
 
-Model `openai/gpt-oss-120b` (provider `groq`), prompt `v3`, rules `v1`. These four metrics genuinely require a live agent turn - gap recall/precision do not (see the Deterministic section above) and are scored there instead, for free, across the full population.
+Gap recall/precision do NOT appear here - per SPEC.md the LLM never decides whether a screening is due, so that's a property of the deterministic SQL engine (see the Deterministic section above), scored there for free across the full population. Everything below genuinely requires a live agent turn: hallucination rate, schema violation rate, severity coercion rate, citation validity, patient leakage, latency.
 
-**Multi-day accumulation methodology:** free-tier daily quotas (Gemini: 20 requests/day; Groq `openai/gpt-oss-120b`: 200,000 tokens/day, ~8-15 patients through this multi-call agent) fall far short of the >=100-patient target in a single day. `eval/run_eval.py --resume` checkpoints every patient's result to disk immediately on completion (`--checkpoint-path`, default `eval/results/checkpoint.json`); re-running the identical command on a later day skips patients that already succeeded and retries ones that previously errored, so quota exhaustion costs at most the in-flight patient, never prior days' work. The table below accumulates over however many `--resume` sessions it took to reach the patient count shown - this is a deliberate, documented constraint of running on free-tier infrastructure, not something to paper over.
+**Multi-day accumulation methodology:** free-tier daily quotas (Gemini: 20 requests/day; Groq `openai/gpt-oss-120b`: 200,000 tokens/day, ~8-15 patients through this multi-call agent) fall far short of the >=100-patient target in a single day. `eval/run_eval.py --resume` checkpoints every patient's result to disk immediately on completion (`--checkpoint-path`, default `eval/results/checkpoint.json`); re-running the identical command on a later day skips patients that already succeeded and retries ones that previously errored, so quota exhaustion costs at most the in-flight patient, never prior days' work. Every checkpoint file under `eval/results/` is an independent accumulation lineage (a fixed provider/model/prompt combination) and gets its own row below, rather than the report only ever showing whichever run happened most recently - two different models hitting the same failure mode is real cross-model evidence, and would be lost if one run's report just overwrote the other's.
+
+**A project reporting 100% on everything reads as untested - the failures below are real, not curated for effect.**
+
+### gemini-3.6-flash (gemini), prompt `v2`, rules `v1`
+
+`gemini_checkpoint.json` - Cross-model / historical validation, not counted toward the >=100-patient target.
+
+| Metric | Value |
+|---|---|
+| Hallucination rate (uncited/fabricated claims) | 0.0% (0/11 findings) |
+| Schema violation rate (real, cited claim; invalid field, rejected) | 9.1% (1/11 findings) |
+| Severity coercion rate (near-miss value corrected, accepted) | 0.0% (0/11 findings) |
+| Citation validity | 100.0% |
+| Patient leakage | 0 (must be 0) |
+| Latency p50 | 25.97s |
+| Latency p95 | 50.91s |
+| Patients completed | 5 |
+| Patients errored this checkpoint | 0 |
+
+> **Known limitation: p95 latency (50.9s) is too slow for point-of-care use.** A clinician pulling up a chart shouldn't wait over a minute for the card to render. A production design would render the deterministic care gaps immediately (they're a plain SQL query - no LLM latency at all) and fill in the LLM-generated narrative/summary asynchronously once it's ready, rather than blocking the whole card on the slowest part of the pipeline.
+
+**Failure examples: hallucinations (uncited or fabricated claims)**
+
+None - every finding the LLM proposed cited a real record for this patient.
+
+**Failure examples: schema violations (real, cited claim; invalid field)**
+
+- **51c2712d-db35-08ab-2902-5d4accc945ea**: 1 of 1 raw findings rejected for a schema violation.
+  - `'Recent ambulatory encounter for check up on 2026-05-12.'` — rejected: failed schema validation: 1 validation error for Finding
+severity
+  Input should be 'high', 'medium' or 'low' [type=literal_error, input_value='info', input_type=str]
+    For further information visit https://errors.pydantic.dev/2.13/v/literal_error
+
+**Severity coercions (near-miss value corrected, not rejected)**
+
+None - every accepted finding used an exact enum value with no correction needed.
+
+**Failure examples: cross-patient citation leakage**
+
+None - 0 leaked citations across all raw findings.
+
+**Errors (patient processing failed outright)**
+
+None in this checkpoint.
+
+### openai/gpt-oss-120b (groq), prompt `v3`, rules `v1`
+
+`groq_v3_checkpoint.json` - Cross-model / historical validation, not counted toward the >=100-patient target.
 
 | Metric | Value |
 |---|---|
@@ -98,30 +146,26 @@ Model `openai/gpt-oss-120b` (provider `groq`), prompt `v3`, rules `v1`. These fo
 | Patient leakage | 0 (must be 0) |
 | Latency p50 | 5.48s |
 | Latency p95 | 6.30s |
-| Patients completed | 2 (target >=100  - still accumulating) |
+| Patients completed | 2 |
 | Patients errored this checkpoint | 3 |
 
-**A project reporting 100% on everything reads as untested - the failures below are real, not curated for effect.**
+**Failure examples: hallucinations (uncited or fabricated claims)**
 
-### Failure examples: hallucinations (uncited or fabricated claims)
+None - every finding the LLM proposed cited a real record for this patient.
 
-None in this run - every finding the LLM proposed cited a real record for this patient.
+**Failure examples: schema violations (real, cited claim; invalid field)**
 
-### Failure examples: schema violations (real, cited claim; invalid field)
+None - every accepted finding's fields matched the Finding schema.
 
-None in this run - every accepted finding's fields matched the Finding schema.
+**Severity coercions (near-miss value corrected, not rejected)**
 
-### Severity coercions (near-miss value corrected, not rejected)
+None - every accepted finding used an exact enum value with no correction needed.
 
-Not a failure - these findings were accepted, with a known synonym (e.g. `'info'`, `'moderate'`) normalized to the exact enum value before validation (see guardrails.py's `_SEVERITY_SYNONYMS`). Tracked separately to show how often correction was still needed even after PROMPT_VERSION v3 spelled out the three allowed values explicitly.
+**Failure examples: cross-patient citation leakage**
 
-None in this run - every accepted finding used an exact enum value with no correction needed.
+None - 0 leaked citations across all raw findings.
 
-### Failure examples: cross-patient citation leakage
-
-None in this run - 0 leaked citations across all raw findings, every run.
-
-### Errors (patient processing failed outright)
+**Errors (patient processing failed outright)**
 
 - **208e43c2-6f0f-f18d-1ed9-92d011f752c0**: `RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit reached for model `openai/gpt-oss-120b` in organization `org_01kjvje6g8e9p8fffc297v49cs` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 198792, Requested 1862. Please try again in 4m42.528s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing', 'type': 'tokens', 'code': 'rate_limit_exceeded'}}`
 - **51c2712d-db35-08ab-2902-5d4accc945ea**: `RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit reached for model `openai/gpt-oss-120b` in organization `org_01kjvje6g8e9p8fffc297v49cs` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 198790, Requested 1381. Please try again in 1m13.872s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing', 'type': 'tokens', 'code': 'rate_limit_exceeded'}}`
