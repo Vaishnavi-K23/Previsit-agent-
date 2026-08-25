@@ -24,10 +24,13 @@ dependencies = [
     # agent framework (Phase 5)
     "langgraph==1.2.11",
     "langchain-core==1.6.0",
-    # LLM providers (Phase 5) — swappable, see src/previsit/llm/
-    "google-genai==2.19.0",
-    "groq==1.6.0",
-    "openai==3.3.1",           # also used for the Azure OpenAI client (unused by default)
+    # LLM providers (Phase 5) — swappable, see src/previsit/llm/. Each
+    # wraps LangChain's BaseChatModel so graph.py's bind_tools/structured
+    # output calls are identical regardless of provider; langchain-openai
+    # is for the Azure OpenAI client (unused by default, proves portability).
+    "langchain-google-genai==4.3.5",
+    "langchain-groq==1.1.3",
+    "langchain-openai==1.6.0",
     # API layer (Phase 7)
     "fastapi==0.141.1",
     "uvicorn[standard]==0.52.4",
