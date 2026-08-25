@@ -25,7 +25,7 @@ class Settings(BaseSettings):
 
     # LLM provider
     llm_provider: str = "gemini"
-    llm_model: str = "gemini-2.5-flash"
+    llm_model: str = "gemini-3.6-flash"
     gemini_api_key: str = ""
     groq_api_key: str = ""
     azure_openai_api_key: str = ""
