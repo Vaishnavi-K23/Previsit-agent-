@@ -52,6 +52,13 @@ _CITATION_EXISTS_SQL = " UNION ALL ".join(
 class RejectedFinding:
     raw: dict[str, Any]
     reason: str
+    # "hallucination": the claim is uncited or cites a record that doesn't
+    # exist / belongs to another patient - the clinical content itself is
+    # untrustworthy. "schema_violation": the citation checked out fine but
+    # the finding failed to parse into Finding (e.g. an out-of-enum severity
+    # value) - the underlying claim was real and cited, just malformed.
+    # Conflating the two overstates hallucination rate with a formatting bug.
+    category: str
 
 
 @dataclass(frozen=True)
@@ -61,7 +68,11 @@ class GuardrailResult:
 
     @property
     def hallucination_count(self) -> int:
-        return len(self.rejected)
+        return sum(1 for r in self.rejected if r.category == "hallucination")
+
+    @property
+    def schema_violation_count(self) -> int:
+        return sum(1 for r in self.rejected if r.category == "schema_violation")
 
 
 def _citation_exists_for_patient(conn, patient_id: str, source_resource_id: str) -> bool:
@@ -87,7 +98,7 @@ def validate_findings(engine: Engine, patient_id: str, raw_findings: list[dict[s
                     reason,
                     raw.get("statement"),
                 )
-                rejected.append(RejectedFinding(raw=raw, reason=reason))
+                rejected.append(RejectedFinding(raw=raw, reason=reason, category="hallucination"))
                 continue
 
             invalid_ids = [
@@ -101,7 +112,7 @@ def validate_findings(engine: Engine, patient_id: str, raw_findings: list[dict[s
                     reason,
                     raw.get("statement"),
                 )
-                rejected.append(RejectedFinding(raw=raw, reason=reason))
+                rejected.append(RejectedFinding(raw=raw, reason=reason, category="hallucination"))
                 continue
 
             try:
@@ -109,12 +120,12 @@ def validate_findings(engine: Engine, patient_id: str, raw_findings: list[dict[s
             except ValidationError as exc:
                 reason = f"failed schema validation: {exc}"
                 logger.warning(
-                    "Guardrail rejected finding for patient %s (hallucination, %s): %r",
+                    "Guardrail rejected finding for patient %s (schema_violation, %s): %r",
                     patient_id,
                     reason,
                     raw.get("statement"),
                 )
-                rejected.append(RejectedFinding(raw=raw, reason=reason))
+                rejected.append(RejectedFinding(raw=raw, reason=reason, category="schema_violation"))
                 continue
 
             accepted.append(finding)
