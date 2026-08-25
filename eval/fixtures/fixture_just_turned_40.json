@@ -1,0 +1,26 @@
+{
+  "resourceType": "Bundle",
+  "type": "collection",
+  "entry": [
+    {
+      "resource": {
+        "resourceType": "Patient",
+        "id": "fixture-just-turned-40",
+        "birthDate": "1986-08-25",
+        "gender": "female",
+        "address": [{"city": "Fixture City", "state": "AZ", "postalCode": "00000"}]
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Condition",
+        "id": "fixture-just-turned-40-cond-diabetes",
+        "clinicalStatus": {"coding": [{"system": "http://terminology.hl7.org/CodeSystem/condition-clinical", "code": "active"}]},
+        "verificationStatus": {"coding": [{"system": "http://terminology.hl7.org/CodeSystem/condition-ver-status", "code": "confirmed"}]},
+        "code": {"coding": [{"system": "http://snomed.info/sct", "code": "44054006", "display": "Diabetes mellitus type 2 (disorder)"}]},
+        "subject": {"reference": "urn:uuid:fixture-just-turned-40"},
+        "onsetDateTime": "2020-01-01T00:00:00"
+      }
+    }
+  ]
+}
