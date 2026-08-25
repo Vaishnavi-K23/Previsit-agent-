@@ -33,6 +33,15 @@ Expected output: a green `[OK]` line for both `SQL Server` and `Qdrant`.
 
 ## Known limitations (early notes, expanded in Phase 8)
 
+- **The LLM is pinned to `gemini-3.6-flash`, deliberately, not the latest
+  available model.** Verified live against Google's own model list (not
+  just an error message) that a newer `gemini-3.7-flash` also exists as of
+  this writing. Pinned anyway: this project is built and evaluated
+  incrementally across phases (Phase 5's agent behavior, Phase 6's eval
+  metrics), and switching the underlying model mid-project would make
+  results from different phases non-comparable for reasons having nothing
+  to do with the actual code changes being tested. `LLM_MODEL` in `.env` is
+  a one-line change if you want to try a newer model yourself.
 - **`find_documentation_gaps`'s "Blurred Vision → diabetic retinopathy"
   signal is weak.** Verified against real data before shipping (see
   `docs/ARCHITECTURE.md`): only 3 patients in this dataset match the
