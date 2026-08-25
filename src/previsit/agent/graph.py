@@ -49,6 +49,7 @@ class AgentState(TypedDict, total=False):
     raw_findings: list[dict]
     one_line_summary: str
     hallucination_count: int
+    schema_violation_count: int
     rejected_findings: list[dict]
     card: PreVisitCard
 
@@ -222,7 +223,10 @@ def apply_guardrail(state: AgentState) -> dict:
     return {
         "card": card,
         "hallucination_count": result.hallucination_count,
-        "rejected_findings": [{"raw": r.raw, "reason": r.reason} for r in result.rejected],
+        "schema_violation_count": result.schema_violation_count,
+        "rejected_findings": [
+            {"raw": r.raw, "reason": r.reason, "category": r.category} for r in result.rejected
+        ],
     }
 
 
