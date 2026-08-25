@@ -150,12 +150,23 @@ def maybe_search_notes(state: AgentState) -> dict:
         SystemMessage(content=SYSTEM_PROMPT),
         HumanMessage(
             content=(
+                "You are deciding ONLY whether to call a tool right now. Do NOT "
+                "write a summary, a card, or any findings text in this turn - "
+                "composition happens in a separate step later, after this "
+                "decision. Your only valid outputs here are: (a) exactly one "
+                "call to search_patient_notes, or (b) no tool call at all.\n\n"
                 "Here is the structured data gathered for this patient:\n\n"
                 f"{context}\n\n"
-                "If any finding above would benefit from supporting narrative "
-                "context from the clinical notes, call search_patient_notes "
-                "with one focused query. If the structured data is already "
-                "sufficient, do not call any tool."
+                "A documentation gap above is based only on a COUNT of "
+                "chief-complaint mentions - it does not include the actual "
+                "wording clinicians used. Searching the notes for that symptom "
+                "term lets you quote real clinical language, which makes the "
+                "finding more concrete for the reviewer. If there is a "
+                "documentation gap above, or any other finding whose statement "
+                "would be strengthened by a supporting quote, call "
+                "search_patient_notes with one focused query built from that "
+                "finding's own symptom or condition term. If nothing above "
+                "would benefit from a quote, do not call any tool."
             )
         ),
     ]
