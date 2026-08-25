@@ -48,7 +48,7 @@ from pathlib import Path
 import mlflow
 from sqlalchemy import text
 
-from eval.doc_sections import AGENT_END, AGENT_START, extract_section, upsert_section
+from eval.doc_sections import AGENT_END, AGENT_START, upsert_section
 from eval.ground_truth import compute_ground_truth, iter_patient_bundles, load_bundle, parse_bundle
 from previsit.agent.graph import build_graph
 from previsit.agent.guardrails import CITABLE_TABLES
@@ -287,19 +287,51 @@ def _result_from_dict(d: dict) -> PatientEvalResult:
     )
 
 
-def load_checkpoint(path: Path) -> dict[str, PatientEvalResult]:
+def checkpoint_meta(provider: str, model: str) -> dict:
+    return {"provider": provider, "model": model, "prompt_version": PROMPT_VERSION, "rule_version": RULE_VERSION}
+
+
+def load_checkpoint(path: Path) -> tuple[dict, dict[str, PatientEvalResult]]:
+    """Returns (meta, results). meta is {} for a checkpoint file written
+    before this metadata existed (a flat {patient_id: result} dict) -
+    treated as unknown provenance rather than guessed at, since a file's
+    provider/model can't be inferred from its contents alone."""
     if not path.exists():
-        return {}
+        return {}, {}
     data = json.loads(path.read_text(encoding="utf-8"))
-    return {pid: _result_from_dict(d) for pid, d in data.items()}
+    if isinstance(data, dict) and "meta" in data and "results" in data:
+        meta = data["meta"]
+        raw_results = data["results"]
+    else:
+        meta = {}
+        raw_results = data
+    return meta, {pid: _result_from_dict(d) for pid, d in raw_results.items()}
 
 
-def save_checkpoint(path: Path, checkpoint: dict[str, PatientEvalResult]) -> None:
+def save_checkpoint(path: Path, meta: dict, checkpoint: dict[str, PatientEvalResult]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
-        json.dumps({pid: _result_to_dict(r) for pid, r in checkpoint.items()}, indent=2),
+        json.dumps(
+            {"meta": meta, "results": {pid: _result_to_dict(r) for pid, r in checkpoint.items()}}, indent=2
+        ),
         encoding="utf-8",
     )
+
+
+def discover_agent_checkpoints(results_dir: Path) -> list[tuple[Path, dict, list[PatientEvalResult]]]:
+    """Every checkpoint file in eval/results/ is an independent accumulation
+    lineage (one provider/model/prompt combination) - each gets its own
+    labeled row and failure-example section in the report, so evidence from
+    one model is never silently replaced by another's when the doc
+    regenerates. This is why two different models hitting the same
+    severity-enum failure mode is visible as two rows, not one overwriting
+    the other."""
+    found = []
+    for path in sorted(results_dir.glob("*checkpoint*.json")):
+        meta, checkpoint = load_checkpoint(path)
+        if checkpoint:
+            found.append((path, meta, list(checkpoint.values())))
+    return found
 
 
 # Preserved from the hand-written notes this file started with (Phase 3),
@@ -387,32 +419,30 @@ provider.
 """
 
 
-def write_eval_results_doc(results: list[PatientEvalResult], metrics: dict, out_path: Path) -> None:
-    lines = []
-    lines.append(AGENT_START)
-    lines.append("")
-    lines.append("## Agent-level metrics (live LLM runs)")
-    lines.append("")
-    lines.append(
-        f"Model `{settings.llm_model}` (provider `{settings.llm_provider}`), prompt `{PROMPT_VERSION}`, "
-        f"rules `{RULE_VERSION}`. These four metrics genuinely require a live agent turn - gap recall/"
-        "precision do not (see the Deterministic section above) and are scored there instead, for free, "
-        "across the full population."
-    )
-    lines.append("")
-    lines.append(
-        "**Multi-day accumulation methodology:** free-tier daily quotas (Gemini: 20 requests/day; Groq "
-        "`openai/gpt-oss-120b`: 200,000 tokens/day, ~8-15 patients through this multi-call agent) fall far "
-        "short of the >=100-patient target in a single day. `eval/run_eval.py --resume` checkpoints every "
-        "patient's result to disk immediately on completion (`--checkpoint-path`, default "
-        "`eval/results/checkpoint.json`); re-running the identical command on a later day skips patients "
-        "that already succeeded and retries ones that previously errored, so quota exhaustion costs at "
-        "most the in-flight patient, never prior days' work. The table below accumulates over however many "
-        "`--resume` sessions it took to reach the patient count shown - this is a deliberate, documented "
-        "constraint of running on free-tier infrastructure, not something to paper over."
-    )
-    lines.append("")
+def _render_checkpoint_block(path: Path, meta: dict, results: list[PatientEvalResult], is_primary: bool) -> list[str]:
+    """One checkpoint file = one independent accumulation lineage (a fixed
+    provider/model/prompt combination). Rendered as its own row + failure
+    examples so it can never be silently replaced by a different provider's
+    data when the doc regenerates - two different models hitting the same
+    failure mode is exactly the kind of evidence that gets lost if the
+    report only ever shows "whichever run happened last"."""
+    if meta:
+        model = meta.get("model", "unknown-model")
+        provider = meta.get("provider", "unknown-provider")
+        prompt_version = meta.get("prompt_version", "?")
+        rule_version = meta.get("rule_version", "?")
+        label = f"{model} ({provider}), prompt `{prompt_version}`, rules `{rule_version}`"
+    else:
+        label = f"{path.name} (legacy checkpoint - written before provider/model metadata was tracked)"
 
+    metrics = aggregate(results)
+    role = (
+        "**Primary accumulation (target >=100 patients)**"
+        if is_primary
+        else "Cross-model / historical validation, not counted toward the >=100-patient target"
+    )
+
+    lines = [f"### {label}", "", f"`{path.name}` - {role}.", ""]
     lines.append("| Metric | Value |")
     lines.append("|---|---|")
     lines.append(f"| Hallucination rate (uncited/fabricated claims) | {metrics['hallucination_rate']:.1%} ({metrics['total_hallucinations']}/{metrics['total_raw_findings']} findings) |")
@@ -422,12 +452,10 @@ def write_eval_results_doc(results: list[PatientEvalResult], metrics: dict, out_
     lines.append(f"| Patient leakage | {metrics['patient_leakage_count']} (must be 0) |")
     lines.append(f"| Latency p50 | {metrics['latency_p50']:.2f}s |")
     lines.append(f"| Latency p95 | {metrics['latency_p95']:.2f}s |")
-    lines.append(f"| Patients completed | {metrics['n_completed']} (target >=100{'  - still accumulating' if metrics['n_completed'] < 100 else ''}) |")
+    lines.append(f"| Patients completed | {metrics['n_completed']}{' - still accumulating toward >=100' if is_primary and metrics['n_completed'] < 100 else ''} |")
     lines.append(f"| Patients errored this checkpoint | {metrics['n_errors']} |")
     if metrics.get("n_given_up"):
-        lines.append(
-            f"| Patients given up on (hit --max-retries-per-patient) | {metrics['n_given_up']} |"
-        )
+        lines.append(f"| Patients given up on (hit --max-retries-per-patient) | {metrics['n_given_up']} |")
     lines.append("")
 
     if metrics["latency_p95"] >= 30:
@@ -440,18 +468,12 @@ def write_eval_results_doc(results: list[PatientEvalResult], metrics: dict, out_
         )
         lines.append("")
 
-    lines.append(
-        "**A project reporting 100% on everything reads as untested - the failures below are "
-        "real, not curated for effect.**"
-    )
-    lines.append("")
-
     failures = _select_failure_examples(results)
 
-    lines.append("### Failure examples: hallucinations (uncited or fabricated claims)")
+    lines.append("**Failure examples: hallucinations (uncited or fabricated claims)**")
     lines.append("")
     if not failures["hallucinations"]:
-        lines.append("None in this run - every finding the LLM proposed cited a real record for this patient.")
+        lines.append("None - every finding the LLM proposed cited a real record for this patient.")
     for r in failures["hallucinations"]:
         lines.append(f"- **{r.patient_id}**: {r.hallucination_count} of {r.raw_finding_count} raw findings rejected as hallucinations.")
         for statement, reason, category in r.rejected:
@@ -459,10 +481,10 @@ def write_eval_results_doc(results: list[PatientEvalResult], metrics: dict, out_
                 lines.append(f"  - `{statement!r}` — rejected: {reason}")
     lines.append("")
 
-    lines.append("### Failure examples: schema violations (real, cited claim; invalid field)")
+    lines.append("**Failure examples: schema violations (real, cited claim; invalid field)**")
     lines.append("")
     if not failures["schema_violations"]:
-        lines.append("None in this run - every accepted finding's fields matched the Finding schema.")
+        lines.append("None - every accepted finding's fields matched the Finding schema.")
     for r in failures["schema_violations"]:
         lines.append(f"- **{r.patient_id}**: {r.schema_violation_count} of {r.raw_finding_count} raw findings rejected for a schema violation.")
         for statement, reason, category in r.rejected:
@@ -470,38 +492,77 @@ def write_eval_results_doc(results: list[PatientEvalResult], metrics: dict, out_
                 lines.append(f"  - `{statement!r}` — rejected: {reason}")
     lines.append("")
 
-    lines.append("### Severity coercions (near-miss value corrected, not rejected)")
-    lines.append("")
-    lines.append(
-        "Not a failure - these findings were accepted, with a known synonym (e.g. `'info'`, `'moderate'`) "
-        "normalized to the exact enum value before validation (see guardrails.py's `_SEVERITY_SYNONYMS`). "
-        "Tracked separately to show how often correction was still needed even after PROMPT_VERSION v3 "
-        "spelled out the three allowed values explicitly."
-    )
+    lines.append("**Severity coercions (near-miss value corrected, not rejected)**")
     lines.append("")
     if not failures["coercions"]:
-        lines.append("None in this run - every accepted finding used an exact enum value with no correction needed.")
+        lines.append("None - every accepted finding used an exact enum value with no correction needed.")
     for r in failures["coercions"]:
         lines.append(f"- **{r.patient_id}**: {r.coerced_severity_count} of {r.raw_finding_count} raw findings had their severity corrected.")
         for statement, original, normalized in r.coerced_severities:
             lines.append(f"  - `{statement!r}` — {original!r} -> {normalized!r}")
     lines.append("")
 
-    lines.append("### Failure examples: cross-patient citation leakage")
+    lines.append("**Failure examples: cross-patient citation leakage**")
     lines.append("")
     if not failures["leakage"]:
-        lines.append("None in this run - 0 leaked citations across all raw findings, every run.")
+        lines.append("None - 0 leaked citations across all raw findings.")
     for r in failures["leakage"]:
         lines.append(f"- **{r.patient_id}**: {r.leaked_details}")
     lines.append("")
 
-    lines.append("### Errors (patient processing failed outright)")
+    lines.append("**Errors (patient processing failed outright)**")
     lines.append("")
     if not failures["errors"]:
         lines.append("None in this checkpoint.")
     for r in failures["errors"]:
         lines.append(f"- **{r.patient_id}**: `{r.error}`")
     lines.append("")
+
+    return lines
+
+
+def write_eval_results_doc(out_path: Path, results_dir: Path = Path("eval/results")) -> None:
+    """Renders every checkpoint file found in results_dir as its own
+    labeled row/section - never just "whichever run happened most
+    recently". See _render_checkpoint_block and discover_agent_checkpoints."""
+    lines = [AGENT_START, "", "## Agent-level metrics (live LLM runs)", ""]
+    lines.append(
+        "Gap recall/precision do NOT appear here - per SPEC.md the LLM never decides whether a screening "
+        "is due, so that's a property of the deterministic SQL engine (see the Deterministic section "
+        "above), scored there for free across the full population. Everything below genuinely requires a "
+        "live agent turn: hallucination rate, schema violation rate, severity coercion rate, citation "
+        "validity, patient leakage, latency."
+    )
+    lines.append("")
+    lines.append(
+        "**Multi-day accumulation methodology:** free-tier daily quotas (Gemini: 20 requests/day; Groq "
+        "`openai/gpt-oss-120b`: 200,000 tokens/day, ~8-15 patients through this multi-call agent) fall far "
+        "short of the >=100-patient target in a single day. `eval/run_eval.py --resume` checkpoints every "
+        "patient's result to disk immediately on completion (`--checkpoint-path`, default "
+        "`eval/results/checkpoint.json`); re-running the identical command on a later day skips patients "
+        "that already succeeded and retries ones that previously errored, so quota exhaustion costs at "
+        "most the in-flight patient, never prior days' work. Every checkpoint file under `eval/results/` is "
+        "an independent accumulation lineage (a fixed provider/model/prompt combination) and gets its own "
+        "row below, rather than the report only ever showing whichever run happened most recently - two "
+        "different models hitting the same failure mode is real cross-model evidence, and would be lost if "
+        "one run's report just overwrote the other's."
+    )
+    lines.append("")
+    lines.append(
+        "**A project reporting 100% on everything reads as untested - the failures below are "
+        "real, not curated for effect.**"
+    )
+    lines.append("")
+
+    checkpoints = discover_agent_checkpoints(results_dir)
+    if not checkpoints:
+        lines.append("No agent-level checkpoint data yet - run `python -m eval.run_eval`.")
+        lines.append("")
+    else:
+        default_path = (results_dir / "checkpoint.json").resolve()
+        for path, meta, results in checkpoints:
+            is_primary = path.resolve() == default_path
+            lines.extend(_render_checkpoint_block(path, meta, results, is_primary))
 
     lines.append(BACKGROUND_NOTES)
     lines.append("")
@@ -588,7 +649,36 @@ def main() -> None:
             "overwrite completed work."
         )
 
-    checkpoint = load_checkpoint(checkpoint_path) if args.resume else {}
+    current_meta = checkpoint_meta(settings.llm_provider, settings.llm_model)
+    if args.resume:
+        existing_meta, checkpoint = load_checkpoint(checkpoint_path)
+        if existing_meta and (
+            existing_meta.get("provider") != current_meta["provider"]
+            or existing_meta.get("model") != current_meta["model"]
+        ):
+            raise SystemExit(
+                f"{checkpoint_path} was accumulated under provider={existing_meta.get('provider')!r} "
+                f"model={existing_meta.get('model')!r}, but this invocation is "
+                f"provider={current_meta['provider']!r} model={current_meta['model']!r}. Refusing to mix "
+                "two providers/models into one accumulation lineage - use a different --checkpoint-path "
+                "for this provider/model instead."
+            )
+        if existing_meta and existing_meta.get("prompt_version") != current_meta["prompt_version"]:
+            raise SystemExit(
+                f"{checkpoint_path} was accumulated under prompt_version={existing_meta.get('prompt_version')!r}, "
+                f"but the current code is prompt_version={current_meta['prompt_version']!r}. Mixing prompt "
+                "versions in one accumulation would corrupt the exact before/after comparison "
+                "PROMPT_VERSION exists to make possible - use a different --checkpoint-path for the new "
+                "prompt version."
+            )
+        if not existing_meta and checkpoint:
+            print(
+                f"Note: {checkpoint_path} has no provider/model metadata (written before this was tracked) "
+                f"- proceeding under the assumption it's provider={current_meta['provider']!r} "
+                f"model={current_meta['model']!r}; this checkpoint will carry that metadata from now on."
+            )
+    else:
+        checkpoint = {}
 
     engine = get_engine()
     fhir_dir = Path(settings.synthea_output_dir) / "fhir"
@@ -642,7 +732,7 @@ def main() -> None:
         result.attempts = prior_attempts + 1
         results.append(result)
         checkpoint[patient_id] = result
-        save_checkpoint(checkpoint_path, checkpoint)
+        save_checkpoint(checkpoint_path, current_meta, checkpoint)
 
         if result.error:
             print(f"    ERROR: {result.error}")
@@ -659,6 +749,12 @@ def main() -> None:
 
         if args.pace_seconds:
             time.sleep(args.pace_seconds)
+
+    # Persist even if to_process was empty this session (e.g. every
+    # selected patient was already done) - guarantees a legacy checkpoint's
+    # metadata upgrade (see the "no existing_meta" branch above) is written
+    # back, not just held in memory for a session that made no new calls.
+    save_checkpoint(checkpoint_path, current_meta, checkpoint)
 
     metrics = aggregate(results)
     metrics["n_given_up"] = len(given_up)
@@ -698,7 +794,7 @@ def main() -> None:
         )
         mlflow.log_artifact(str(results_path))
 
-    write_eval_results_doc(results, metrics, Path("docs/EVAL_RESULTS.md"))
+    write_eval_results_doc(Path("docs/EVAL_RESULTS.md"))
     print("\nWrote docs/EVAL_RESULTS.md")
 
     if metrics["n_completed"] < 100:
