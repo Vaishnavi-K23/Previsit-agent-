@@ -62,7 +62,13 @@ def _insert_condition(engine, patient_id, code, display="test condition", clinic
                 "(patient_id, source_resource_id, code_system, code, display, clinical_status, verification_status) "
                 "VALUES (:pid, :sid, 'http://snomed.info/sct', :code, :display, :status, 'confirmed')"
             ),
-            {"pid": patient_id, "sid": f"cond-{uuid.uuid4()}", "code": code, "display": display, "status": clinical_status},
+            {
+                "pid": patient_id,
+                "sid": f"cond-{uuid.uuid4()}",
+                "code": code,
+                "display": display,
+                "status": clinical_status,
+            },
         )
 
 
@@ -86,7 +92,14 @@ def _insert_observation(engine, patient_id, code, value, unit, effective_dt):
                 "(patient_id, source_resource_id, code_system, code, display, value_numeric, unit, effective_datetime) "
                 "VALUES (:pid, :sid, 'http://loinc.org', :code, 'test obs', :val, :unit, :dt)"
             ),
-            {"pid": patient_id, "sid": f"obs-{uuid.uuid4()}", "code": code, "val": value, "unit": unit, "dt": effective_dt},
+            {
+                "pid": patient_id,
+                "sid": f"obs-{uuid.uuid4()}",
+                "code": code,
+                "val": value,
+                "unit": unit,
+                "dt": effective_dt,
+            },
         )
 
 

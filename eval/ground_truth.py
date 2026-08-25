@@ -17,7 +17,7 @@ shared design, not to encode a different design.
 
 import json
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 # --- Value sets -------------------------------------------------------------
@@ -149,9 +149,8 @@ def _parse_dt(value: str | None) -> datetime | None:
         return None
     dt = datetime.fromisoformat(value)
     if dt.tzinfo is not None:
-        from datetime import timezone
 
-        dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+        dt = dt.astimezone(UTC).replace(tzinfo=None)
     return dt
 
 

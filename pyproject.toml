@@ -57,11 +57,26 @@ dev = [
 packages = ["src/previsit"]
 
 [tool.ruff]
-line-length = 100
+# Raised from the original 100 to 120 when CI was added (Phase 8): `ruff
+# check .` had never actually been run against the real codebase before,
+# and at 100 it flagged 247 pre-existing violations, almost all of them
+# long, information-dense inline comments explaining a non-obvious WHY -
+# this project's deliberate documentation style throughout, not a lapse.
+# 120 leaves a small number of genuinely long lines to fix directly rather
+# than raising the limit further to paper over them.
+line-length = 120
 target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.per-file-ignores]
+# B008 (function call in a default argument) is a real footgun in general,
+# but `Depends(...)` in a default argument is FastAPI's own documented
+# dependency-injection pattern, not a mistake - FastAPI resolves it at
+# request time, it isn't evaluated once at import time the way B008 warns
+# against.
+"src/previsit/api/main.py" = ["B008"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -37,9 +37,9 @@ ever re-spending quota on a patient that already completed.
 
 import argparse
 import json
-import sys
 import random
 import statistics
+import sys
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -79,7 +79,9 @@ class PatientEvalResult:
     attempts: int = 0  # how many times evaluate_one_patient has been called for this patient across --resume sessions
 
 
-def select_eval_patients(fhir_dir: Path, n_with_gaps: int, n_without_gaps: int, seed: int, as_of: datetime) -> list[str]:
+def select_eval_patients(
+    fhir_dir: Path, n_with_gaps: int, n_without_gaps: int, seed: int, as_of: datetime
+) -> list[str]:
     """Stratified sample: some patients with >=1 deterministic gap, some
     with none, so the agent is exercised on both "there's something to
     report" and "everything's fine" cards. The stratification itself is
@@ -445,14 +447,25 @@ def _render_checkpoint_block(path: Path, meta: dict, results: list[PatientEvalRe
     lines = [f"### {label}", "", f"`{path.name}` - {role}.", ""]
     lines.append("| Metric | Value |")
     lines.append("|---|---|")
-    lines.append(f"| Hallucination rate (uncited/fabricated claims) | {metrics['hallucination_rate']:.1%} ({metrics['total_hallucinations']}/{metrics['total_raw_findings']} findings) |")
-    lines.append(f"| Schema violation rate (real, cited claim; invalid field, rejected) | {metrics['schema_violation_rate']:.1%} ({metrics['total_schema_violations']}/{metrics['total_raw_findings']} findings) |")
-    lines.append(f"| Severity coercion rate (near-miss value corrected, accepted) | {metrics['coercion_rate']:.1%} ({metrics['total_coerced_severities']}/{metrics['total_raw_findings']} findings) |")
+    raw_n = metrics["total_raw_findings"]
+    lines.append(
+        f"| Hallucination rate (uncited/fabricated claims) | {metrics['hallucination_rate']:.1%} "
+        f"({metrics['total_hallucinations']}/{raw_n} findings) |"
+    )
+    lines.append(
+        f"| Schema violation rate (real, cited claim; invalid field, rejected) | "
+        f"{metrics['schema_violation_rate']:.1%} ({metrics['total_schema_violations']}/{raw_n} findings) |"
+    )
+    lines.append(
+        f"| Severity coercion rate (near-miss value corrected, accepted) | {metrics['coercion_rate']:.1%} "
+        f"({metrics['total_coerced_severities']}/{raw_n} findings) |"
+    )
     lines.append(f"| Citation validity | {metrics['citation_validity']:.1%} |")
     lines.append(f"| Patient leakage | {metrics['patient_leakage_count']} (must be 0) |")
     lines.append(f"| Latency p50 | {metrics['latency_p50']:.2f}s |")
     lines.append(f"| Latency p95 | {metrics['latency_p95']:.2f}s |")
-    lines.append(f"| Patients completed | {metrics['n_completed']}{' - still accumulating toward >=100' if is_primary and metrics['n_completed'] < 100 else ''} |")
+    still_accumulating = " - still accumulating toward >=100" if is_primary and metrics["n_completed"] < 100 else ""
+    lines.append(f"| Patients completed | {metrics['n_completed']}{still_accumulating} |")
     lines.append(f"| Patients errored this checkpoint | {metrics['n_errors']} |")
     if metrics.get("n_given_up"):
         lines.append(f"| Patients given up on (hit --max-retries-per-patient) | {metrics['n_given_up']} |")
@@ -475,7 +488,10 @@ def _render_checkpoint_block(path: Path, meta: dict, results: list[PatientEvalRe
     if not failures["hallucinations"]:
         lines.append("None - every finding the LLM proposed cited a real record for this patient.")
     for r in failures["hallucinations"]:
-        lines.append(f"- **{r.patient_id}**: {r.hallucination_count} of {r.raw_finding_count} raw findings rejected as hallucinations.")
+        lines.append(
+            f"- **{r.patient_id}**: {r.hallucination_count} of {r.raw_finding_count} raw findings "
+            "rejected as hallucinations."
+        )
         for statement, reason, category in r.rejected:
             if category == "hallucination":
                 lines.append(f"  - `{statement!r}` — rejected: {reason}")
@@ -486,7 +502,10 @@ def _render_checkpoint_block(path: Path, meta: dict, results: list[PatientEvalRe
     if not failures["schema_violations"]:
         lines.append("None - every accepted finding's fields matched the Finding schema.")
     for r in failures["schema_violations"]:
-        lines.append(f"- **{r.patient_id}**: {r.schema_violation_count} of {r.raw_finding_count} raw findings rejected for a schema violation.")
+        lines.append(
+            f"- **{r.patient_id}**: {r.schema_violation_count} of {r.raw_finding_count} raw findings "
+            "rejected for a schema violation."
+        )
         for statement, reason, category in r.rejected:
             if category == "schema_violation":
                 lines.append(f"  - `{statement!r}` — rejected: {reason}")
@@ -497,7 +516,10 @@ def _render_checkpoint_block(path: Path, meta: dict, results: list[PatientEvalRe
     if not failures["coercions"]:
         lines.append("None - every accepted finding used an exact enum value with no correction needed.")
     for r in failures["coercions"]:
-        lines.append(f"- **{r.patient_id}**: {r.coerced_severity_count} of {r.raw_finding_count} raw findings had their severity corrected.")
+        lines.append(
+            f"- **{r.patient_id}**: {r.coerced_severity_count} of {r.raw_finding_count} raw findings "
+            "had their severity corrected."
+        )
         for statement, original, normalized in r.coerced_severities:
             lines.append(f"  - `{statement!r}` — {original!r} -> {normalized!r}")
     lines.append("")
@@ -727,7 +749,8 @@ def main() -> None:
     consecutive_new_errors = 0
     for i, patient_id in enumerate(to_process, 1):
         prior_attempts = checkpoint[patient_id].attempts if patient_id in checkpoint else 0
-        print(f"[{i}/{len(to_process)}] {patient_id}" + (f" (retry, attempt {prior_attempts + 1})" if prior_attempts else ""))
+        retry_note = f" (retry, attempt {prior_attempts + 1})" if prior_attempts else ""
+        print(f"[{i}/{len(to_process)}] {patient_id}{retry_note}")
         result = evaluate_one_patient(engine, app, patient_id)
         result.attempts = prior_attempts + 1
         results.append(result)

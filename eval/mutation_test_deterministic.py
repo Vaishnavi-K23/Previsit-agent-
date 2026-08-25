@@ -18,10 +18,10 @@ Run: `python -m eval.mutation_test_deterministic`
 
 import json
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Callable, Optional
 
 from sqlalchemy import text
 
@@ -84,7 +84,7 @@ class Mutation:
     file: str
     find: str
     replace: str
-    investigate_miss: Optional[Callable] = None
+    investigate_miss: Callable | None = None
 
 
 MUTATIONS = [
@@ -281,9 +281,8 @@ def write_section(summary: dict, as_of: datetime, out_path: Path) -> None:
                 "check's sensitivity - needs real follow-up, not just a note.**"
             )
     lines.append("")
-    lines.append(
-        f"Post-mutation-testing re-check: engine restored cleanly, {'0 discrepancies' if summary['post_check_clean'] else 'DISCREPANCIES REMAIN - see above'}."
-    )
+    clean_status = "0 discrepancies" if summary["post_check_clean"] else "DISCREPANCIES REMAIN - see above"
+    lines.append(f"Post-mutation-testing re-check: engine restored cleanly, {clean_status}.")
     lines.append("")
     lines.append(MUTATION_END)
 

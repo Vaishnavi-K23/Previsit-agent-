@@ -1,0 +1,109 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  lint-test-smoke:
+    runs-on: ubuntu-latest
+
+    # GEMINI_API_KEY is deliberately NOT set here. tests/test_graph.py's one
+    # test needing a live LLM call is marked
+    # `@pytest.mark.skipif(not settings.gemini_api_key, ...)` and skips
+    # cleanly without it - CI must never spend this project's scarce
+    # 20-requests/day free-tier quota, which local dev and the eval harness
+    # already compete for (see docs/EVAL_RESULTS.md).
+    env:
+      MSSQL_SA_PASSWORD: Ci_only_password8
+      MSSQL_HOST: localhost
+      MSSQL_PORT: "1433"
+      MSSQL_DATABASE: previsit
+      MSSQL_DRIVER: "ODBC Driver 18 for SQL Server"
+      QDRANT_HOST: localhost
+      QDRANT_HTTP_PORT: "6333"
+      QDRANT_GRPC_PORT: "6334"
+      QDRANT_COLLECTION: note_chunks
+      EMBEDDING_MODEL: all-MiniLM-L6-v2
+      LLM_PROVIDER: gemini
+      LLM_MODEL: gemini-3.6-flash
+      MLFLOW_TRACKING_URI: sqlite:///mlruns.db
+      SYNTHEA_OUTPUT_DIR: ./data/synthea_output
+      SYNTHEA_STATE: Arizona
+      API_HOST: 0.0.0.0
+      API_PORT: "8000"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Install Microsoft ODBC Driver 18 (needed by pyodbc)
+        run: |
+          curl -sSL https://packages.microsoft.com/keys/microsoft.asc | sudo tee /etc/apt/trusted.gpg.d/microsoft.asc > /dev/null
+          curl -sSL https://packages.microsoft.com/config/ubuntu/22.04/prod.list | sudo tee /etc/apt/sources.list.d/mssql-release.list
+          sudo apt-get update
+          ACCEPT_EULA=Y sudo apt-get install -y msodbcsql18 unixodbc-dev
+
+      - name: Install Python dependencies
+        run: pip install -e ".[dev]"
+
+      - name: Ruff lint
+        run: ruff check .
+
+      - name: Start SQL Server and Qdrant
+        run: docker compose up -d
+
+      - name: Wait for services to be healthy
+        run: |
+          for i in $(seq 1 30); do
+            sql_status=$(docker inspect -f '{{.State.Health.Status}}' previsit-sqlserver 2>/dev/null || echo "missing")
+            qdrant_status=$(docker inspect -f '{{.State.Health.Status}}' previsit-qdrant 2>/dev/null || echo "missing")
+            echo "sqlserver=$sql_status qdrant=$qdrant_status"
+            if [ "$sql_status" = "healthy" ] && [ "$qdrant_status" = "healthy" ]; then
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Services did not become healthy in time"
+          docker compose logs
+          exit 1
+
+      - name: Bootstrap empty schema and vector collection (no patients yet)
+        # apply_schema()/ensure_collection() only create structure - loading
+        # zero rows here is deliberate, so pytest's insert-and-cleanup tests
+        # (see tests/test_agent_tools.py) have tables/a collection to use
+        # before any real Synthea data exists.
+        run: |
+          python -m previsit.ingest.loader
+          python -c "from previsit.ingest.note_indexer import ensure_collection; from previsit.retrieval.vector_tools import get_client; ensure_collection(get_client())"
+
+      - name: Run tests
+        run: pytest -v
+
+      - name: Smoke test - generate, load, and index 10 synthetic patients end to end
+        run: |
+          python -c "from previsit.ingest.synthea_runner import run; run(population=10)"
+          python -m previsit.ingest.loader
+          python -m previsit.ingest.note_indexer
+          python -c "
+          from previsit.ingest.loader import get_engine
+          from sqlalchemy import text
+          engine = get_engine()
+          with engine.connect() as conn:
+              n = conn.execute(text('SELECT COUNT(*) FROM dim_patient')).scalar()
+          assert n >= 10, f'expected >=10 patients loaded end to end, got {n}'
+          print(f'Smoke test OK: {n} patients loaded end to end')
+          "
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v

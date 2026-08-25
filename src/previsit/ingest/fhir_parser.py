@@ -13,7 +13,7 @@ resource-type quirks worth remembering:
     list, one row per (resource, code) pair, not one row per resource.
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import TypedDict
 
 
@@ -151,9 +151,8 @@ def _parse_datetime(value: str | None) -> datetime | None:
         return None
     dt = datetime.fromisoformat(value)
     if dt.tzinfo is not None:
-        from datetime import timezone
 
-        dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+        dt = dt.astimezone(UTC).replace(tzinfo=None)
     return dt
 
 

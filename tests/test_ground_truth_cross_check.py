@@ -49,7 +49,8 @@ def _load_fixture_into_sql(engine, bundle: dict) -> str:
             text(
                 "INSERT INTO dim_patient "
                 "(patient_id, source_resource_id, birth_date, gender, deceased_flag, city, state, postal_code) "
-                "VALUES (:patient_id, :source_resource_id, :birth_date, :gender, :deceased_flag, :city, :state, :postal_code)"
+                "VALUES (:patient_id, :source_resource_id, :birth_date, :gender, :deceased_flag, "
+                ":city, :state, :postal_code)"
             ),
             patient_row,
         )
