@@ -31,6 +31,17 @@ python -m previsit.healthcheck
 
 Expected output: a green `[OK]` line for both `SQL Server` and `Qdrant`.
 
+## Known limitations (early notes, expanded in Phase 8)
+
+- **`find_documentation_gaps`'s "Blurred Vision → diabetic retinopathy"
+  signal is weak.** Verified against real data before shipping (see
+  `docs/ARCHITECTURE.md`): only 3 patients in this dataset match the
+  pattern (recurring blurred vision, diabetic, no retinopathy code). It's
+  included anyway, alongside the stronger "Tingling in Hands and Feet →
+  diabetic neuropathy" pair (12 patients), specifically to show the
+  symptom → gap pattern generalizes beyond one hardcoded case - but treat
+  its output as a much thinner signal than the neuropathy pair.
+
 ## License
 
 MIT

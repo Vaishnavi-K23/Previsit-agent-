@@ -22,19 +22,26 @@ DiagnosticReport.conclusion too):
 
 import base64
 import json
+import re
 import uuid
+from datetime import date
 from pathlib import Path
 from typing import TypedDict
 
 from qdrant_client import QdrantClient
 from qdrant_client.http import models as qmodels
 from sentence_transformers import SentenceTransformer
+from sqlalchemy import text
+from sqlalchemy.engine import Engine
 
 from previsit.config import settings
 
 CHUNK_SIZE_WORDS = 150
 CHUNK_OVERLAP_WORDS = 30
 EMBEDDING_DIM = 384  # all-MiniLM-L6-v2 output size
+
+CHIEF_COMPLAINT_RE = re.compile(r"#\s*Chief Complaint\s*\n(.*?)(?=\n#\s|\Z)", re.DOTALL)
+NOTE_DATE_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})")
 
 
 class NoteRecord(TypedDict):
@@ -128,6 +135,73 @@ def build_chunk_records(notes: list[NoteRecord]) -> list[NoteChunkRecord]:
     return records
 
 
+class ChiefComplaintRecord(TypedDict):
+    patient_id: str
+    source_resource_id: str
+    term: str
+    note_date: date | None
+
+
+def extract_chief_complaint_terms(note_text: str) -> list[str]:
+    """Pulls the atomic symptom terms out of a note's `# Chief Complaint`
+    bullet list. "No complaints." (46% of notes) yields an empty list -
+    it's not a symptom, it's the absence of one.
+
+    Deliberately does NOT touch the History of Present Illness section -
+    see docs/ARCHITECTURE.md: that section is a templated prose rendering
+    of the patient's already-coded condition list, so scanning it for
+    "conditions mentioned but not coded" is circular by construction. The
+    chief complaint list is the one part of these notes that carries
+    information independent of fact_condition.
+    """
+    m = CHIEF_COMPLAINT_RE.search(note_text)
+    if not m:
+        return []
+    block = m.group(1).strip()
+    if block == "No complaints.":
+        return []
+    return [ln.strip().lstrip("- ").strip() for ln in block.split("\n") if ln.strip().startswith("-")]
+
+
+def _extract_note_date(note_text: str) -> date | None:
+    m = NOTE_DATE_RE.match(note_text)
+    if not m:
+        return None
+    return date.fromisoformat(m.group(1))
+
+
+def build_chief_complaint_records(notes: list[NoteRecord]) -> list[ChiefComplaintRecord]:
+    records: list[ChiefComplaintRecord] = []
+    for note in notes:
+        note_date = _extract_note_date(note["text"])
+        for term in extract_chief_complaint_terms(note["text"]):
+            records.append(
+                ChiefComplaintRecord(
+                    patient_id=note["patient_id"],
+                    source_resource_id=note["source_resource_id"],
+                    term=term,
+                    note_date=note_date,
+                )
+            )
+    return records
+
+
+def populate_chief_complaints(engine: Engine, records: list[ChiefComplaintRecord]) -> int:
+    """Full wipe-and-reload, same idempotency approach as the Phase 2 loader."""
+    with engine.begin() as conn:
+        conn.execute(text("TRUNCATE TABLE fact_chief_complaint"))
+        if records:
+            conn.execute(
+                text(
+                    "INSERT INTO fact_chief_complaint "
+                    "(patient_id, source_resource_id, term, note_date) "
+                    "VALUES (:patient_id, :source_resource_id, :term, :note_date)"
+                ),
+                records,
+            )
+    return len(records)
+
+
 def _point_id(source_resource_id: str, chunk_index: int) -> str:
     """Deterministic point id so re-indexing overwrites rather than
     duplicates - same idempotent-reload principle as the Phase 2 loader."""
@@ -188,6 +262,16 @@ def main() -> None:
     print("Chunking...")
     records = build_chunk_records(all_notes)
     print(f"  {len(records)} chunks")
+
+    print("Parsing chief-complaint terms...")
+    from previsit.ingest.loader import apply_schema, ensure_database, get_engine
+
+    ensure_database()
+    engine = get_engine()
+    apply_schema(engine)  # ensures fact_chief_complaint exists (sql/03_chief_complaint.sql)
+    cc_records = build_chief_complaint_records(all_notes)
+    n_cc = populate_chief_complaints(engine, cc_records)
+    print(f"  {n_cc} chief-complaint terms loaded")
 
     print(f"Loading embedding model ({settings.embedding_model})...")
     model = SentenceTransformer(settings.embedding_model)

@@ -176,7 +176,7 @@ def _split_sql_batches(sql_text: str) -> list[str]:
 
 def apply_schema(engine: Engine) -> None:
     with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
-        for filename in ("01_schema.sql", "02_indexes.sql"):
+        for filename in ("01_schema.sql", "02_indexes.sql", "03_chief_complaint.sql"):
             sql_text = (SQL_DIR / filename).read_text(encoding="utf-8")
             for batch in _split_sql_batches(sql_text):
                 conn.execute(text(batch))
