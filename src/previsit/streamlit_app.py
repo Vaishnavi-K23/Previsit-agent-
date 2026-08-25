@@ -107,9 +107,8 @@ else:
     severity_badge = {"high": "🔴 high", "medium": "🟠 medium", "low": "🟢 low"}
     for finding in sorted(card.findings, key=lambda f: severity_rank.get(f.severity, 3)):
         with st.container(border=True):
-            st.markdown(
-                f"**{finding.category.replace('_', ' ').title()}** · {severity_badge.get(finding.severity, finding.severity)}"
-            )
+            badge = severity_badge.get(finding.severity, finding.severity)
+            st.markdown(f"**{finding.category.replace('_', ' ').title()}** · {badge}")
             st.write(finding.statement)
             for sid in finding.source_resource_ids:
                 with st.expander(f"Citation: `{sid}`"):

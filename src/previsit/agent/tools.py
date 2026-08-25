@@ -220,7 +220,10 @@ def _is_diabetic(conn, patient_id: str) -> bool:
     med_params = {f"med{i}": c for i, c in enumerate(DIABETES_MEDICATION_CODES)}
     med_params["pid"] = patient_id
     has_med = conn.execute(
-        text(f"SELECT 1 FROM fact_medication WHERE patient_id=:pid AND status='active' AND code IN ({med_placeholders})"),
+        text(
+            f"SELECT 1 FROM fact_medication WHERE patient_id=:pid AND status='active' "
+            f"AND code IN ({med_placeholders})"
+        ),
         med_params,
     ).fetchone()
     return has_med is not None

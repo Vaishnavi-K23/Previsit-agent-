@@ -189,7 +189,10 @@ def write_section(result: DeterministicResult, as_of: datetime, out_path: Path) 
 
     lines.append("| Metric | Value |")
     lines.append("|---|---|")
-    lines.append(f"| Patients evaluated (denominator) | {result.n_patients} ({result.n_dim_patient_living} living + {result.n_dim_patient_deceased} deceased) |")
+    lines.append(
+        f"| Patients evaluated (denominator) | {result.n_patients} "
+        f"({result.n_dim_patient_living} living + {result.n_dim_patient_deceased} deceased) |"
+    )
     lines.append(f"| Gap recall | {recall:.1%} ({result.total_tp}/{result.total_tp + result.total_fn}) |")
     lines.append(f"| Gap precision | {precision:.1%} ({result.total_tp}/{result.total_tp + result.total_fp}) |")
     lines.append(
@@ -259,14 +262,16 @@ def write_section(result: DeterministicResult, as_of: datetime, out_path: Path) 
         for patient_id, truth, predicted in shown:
             lines.append(f"- **{patient_id}**: ground truth {truth}, SQL engine {predicted}")
         if len(result.discrepancies) > len(shown):
-            lines.append(f"- ... and {len(result.discrepancies) - len(shown)} more (see eval/results/deterministic_check.json)")
+            n_more = len(result.discrepancies) - len(shown)
+            lines.append(f"- ... and {n_more} more (see eval/results/deterministic_check.json)")
     lines.append("")
     lines.append(DETERMINISTIC_END)
 
     section = "\n".join(lines)
     existing_text = out_path.read_text(encoding="utf-8") if out_path.exists() else "# Eval Results\n"
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(upsert_section(existing_text, section, DETERMINISTIC_START, DETERMINISTIC_END), encoding="utf-8")
+    new_text = upsert_section(existing_text, section, DETERMINISTIC_START, DETERMINISTIC_END)
+    out_path.write_text(new_text, encoding="utf-8")
 
 
 def main() -> None:
