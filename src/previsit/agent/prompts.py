@@ -10,7 +10,13 @@ this prompt exists to keep the LLM from adding anything on top of that.
 # on every eval run (eval/run_eval.py) so a metrics shift can be traced back
 # to a specific prompt revision. v2: fixed maybe_search_notes letting the
 # model draft the whole card instead of making a narrow tool/no-tool call.
-PROMPT_VERSION = "v2"
+# v3: recent_event severity was the one field the model has to invent
+# rather than copy from a tool (Gap.severity covers everything else) - both
+# gemini-3.6-flash and openai/gpt-oss-120b drifted to synonyms ("moderate",
+# "informational", "info") instead of the exact enum when told to "use your
+# judgment" with no further guidance. Spelled out the three allowed values
+# and a concrete mapping for recent_event specifically.
+PROMPT_VERSION = "v3"
 
 SYSTEM_PROMPT = """\
 You are a clinical documentation assistant. You prepare a "pre-visit card" \
@@ -52,9 +58,18 @@ check_care_gaps), uncontrolled_condition (a Gap whose title indicates a \
 value is out of range, e.g. blood pressure or A1c), documentation_gap \
 (from find_documentation_gaps), recent_event (from get_recent_encounters - \
 especially an ED visit with no follow-up encounter since). Assign severity \
-exactly as the source tool reported it where applicable (Gap.severity); use \
-your judgment only for recent_event findings, which have no tool-assigned \
-severity.
+exactly as the source tool reported it where applicable (Gap.severity).
+
+recent_event findings have no tool-assigned severity, so you must choose \
+one yourself - but the value MUST be exactly one of these three words, \
+nothing else: "high", "medium", or "low". Never write a synonym like \
+"moderate", "informational", "info", "urgent", or "critical" - the field \
+only accepts these three exact values and anything else is rejected \
+outright. Use this mapping: "high" for an ED visit, hospital admission, or \
+urgent/emergent encounter with no documented follow-up since; "medium" for \
+a specialist or urgent-care visit that's routine but still worth a \
+provider's attention; "low" for an ambulatory check-up, wellness visit, or \
+other routine encounter with nothing outstanding.
 
 Write a one-line summary a provider can read before walking in - plain \
 language, no jargon, no invented detail beyond what the findings state.

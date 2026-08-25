@@ -67,6 +67,8 @@ class PatientEvalResult:
     hallucination_count: int = 0
     schema_violation_count: int = 0
     rejected: list = field(default_factory=list)  # [(statement, reason, category), ...]
+    coerced_severity_count: int = 0
+    coerced_severities: list = field(default_factory=list)  # [(statement, original, normalized), ...]
     leaked_citation_count: int = 0
     leaked_details: list = field(default_factory=list)
     citation_validity_hits: int = 0
@@ -74,6 +76,7 @@ class PatientEvalResult:
     latency_seconds: float = 0.0
     findings_summary: list = field(default_factory=list)  # [(category, statement), ...]
     error: str | None = None
+    attempts: int = 0  # how many times evaluate_one_patient has been called for this patient across --resume sessions
 
 
 def select_eval_patients(fhir_dir: Path, n_with_gaps: int, n_without_gaps: int, seed: int, as_of: datetime) -> list[str]:
@@ -157,6 +160,9 @@ def evaluate_one_patient(engine, app, patient_id: str) -> PatientEvalResult:
     result.rejected = [
         (r["raw"].get("statement"), r["reason"], r["category"]) for r in state.get("rejected_findings", []) or []
     ]
+    coerced = state.get("coerced_severities", []) or []
+    result.coerced_severity_count = len(coerced)
+    result.coerced_severities = [(c["statement"], c["original_value"], c["normalized_value"]) for c in coerced]
 
     for f in card.findings:
         result.findings_summary.append((f.category, f.statement))
@@ -185,6 +191,7 @@ def aggregate(results: list[PatientEvalResult]) -> dict:
     total_raw = sum(r.raw_finding_count for r in completed)
     total_hallucinations = sum(r.hallucination_count for r in completed)
     total_schema_violations = sum(r.schema_violation_count for r in completed)
+    total_coerced_severities = sum(r.coerced_severity_count for r in completed)
     total_citation_hits = sum(r.citation_validity_hits for r in completed)
     total_citation_total = sum(r.citation_validity_total for r in completed)
     total_leaked = sum(r.leaked_citation_count for r in completed)
@@ -208,6 +215,8 @@ def aggregate(results: list[PatientEvalResult]) -> dict:
         "total_raw_findings": total_raw,
         "total_hallucinations": total_hallucinations,
         "total_schema_violations": total_schema_violations,
+        "total_coerced_severities": total_coerced_severities,
+        "coercion_rate": pct(total_coerced_severities, total_raw),
     }
 
 
@@ -219,6 +228,7 @@ def _select_failure_examples(results: list[PatientEvalResult], k: int = 5) -> di
     return {
         "hallucinations": [r for r in completed if r.hallucination_count][:k],
         "schema_violations": [r for r in completed if r.schema_violation_count][:k],
+        "coercions": [r for r in completed if r.coerced_severity_count][:k],
         "leakage": [r for r in completed if r.leaked_citation_count][:k],
         "errors": [r for r in results if r.error][:k],
     }
@@ -243,6 +253,8 @@ def _result_to_dict(r: PatientEvalResult) -> dict:
         "hallucination_count": r.hallucination_count,
         "schema_violation_count": r.schema_violation_count,
         "rejected": [list(t) for t in r.rejected],
+        "coerced_severity_count": r.coerced_severity_count,
+        "coerced_severities": [list(t) for t in r.coerced_severities],
         "leaked_citation_count": r.leaked_citation_count,
         "leaked_details": [list(t) for t in r.leaked_details],
         "citation_validity_hits": r.citation_validity_hits,
@@ -250,6 +262,7 @@ def _result_to_dict(r: PatientEvalResult) -> dict:
         "latency_seconds": r.latency_seconds,
         "findings_summary": [list(t) for t in r.findings_summary],
         "error": r.error,
+        "attempts": r.attempts,
     }
 
 
@@ -261,6 +274,8 @@ def _result_from_dict(d: dict) -> PatientEvalResult:
         hallucination_count=d.get("hallucination_count", 0),
         schema_violation_count=d.get("schema_violation_count", 0),
         rejected=[tuple(t) for t in d.get("rejected", [])],
+        coerced_severity_count=d.get("coerced_severity_count", 0),
+        coerced_severities=[tuple(t) for t in d.get("coerced_severities", [])],
         leaked_citation_count=d.get("leaked_citation_count", 0),
         leaked_details=[tuple(t) for t in d.get("leaked_details", [])],
         citation_validity_hits=d.get("citation_validity_hits", 0),
@@ -268,6 +283,7 @@ def _result_from_dict(d: dict) -> PatientEvalResult:
         latency_seconds=d.get("latency_seconds", 0.0),
         findings_summary=[tuple(t) for t in d.get("findings_summary", [])],
         error=d.get("error"),
+        attempts=d.get("attempts", 0),
     )
 
 
@@ -333,14 +349,41 @@ violations (all an out-of-enum `severity` value - `'moderate'` or \
 violation rate is the reason this file distinguishes schema_violation_rate \
 from hallucination_rate at all - conflating them would have reported a \
 14.3% "hallucination rate" for a run with zero actual hallucinations. \
-The same failure mode (an out-of-enum severity value, `'info'` this time) \
-recurred on the very first Gemini batch after `--resume` was built, on a \
-different provider entirely - see the Failure examples above. That's \
-convergent evidence across two unrelated models, not a Groq-specific \
-quirk: `SYSTEM_PROMPT`'s severity instructions are underspecified enough \
-that models drift to plausible-sounding synonyms instead of the exact \
-enum. Worth tightening the prompt to enumerate the three allowed values \
-explicitly, independent of which provider is in use.
+The same failure mode recurred on the very first Gemini batch after \
+`--resume` was built, on a different provider entirely: patient \
+51c2712d-db35-08ab-2902-5d4accc945ea's card proposed `'Recent ambulatory \
+encounter for check up on 2026-05-12.'` with `severity='info'` - rejected \
+by the same schema-validation check, same root cause, different model \
+(1/11 findings on that 5-patient Gemini batch). That's convergent evidence \
+across two unrelated models, not a Groq-specific quirk: `SYSTEM_PROMPT`'s \
+severity instructions were underspecified enough that models drift to \
+plausible-sounding synonyms instead of the exact enum. See "Closing the \
+severity loop" below for the fix.
+
+## Closing the severity loop (PROMPT_VERSION v3)
+
+Two changes, not just a flag raised: `SYSTEM_PROMPT` now spells out the \
+exact three allowed severity values with concrete mapping guidance for \
+recent_event (the one field the model has to invent rather than copy from \
+a tool), and `guardrails.py` now normalizes known near-miss synonyms \
+(`'info'`/`'informational'` -> low, `'moderate'`/`'warning'` -> medium, \
+`'urgent'`/`'critical'` -> high, etc.) before validation, logging every \
+coercion rather than either silently accepting or rejecting a finding \
+whose citation and clinical content were both fine. Unmapped values still \
+fail validation and are rejected as schema violations, not guessed at.
+
+The Agent-level metrics table above (prompt `v3`) is the first data point \
+under this fix: 2 patients completed against Groq before hitting the same \
+200,000-tokens/day wall again (the earlier runs today had already spent \
+most of it), and on those 2, 0 of 9 raw findings needed either coercion or \
+rejection - zero severity issues of any kind, versus 3/21 schema \
+violations pre-fix on the same model. That is a real, positive signal, but \
+n=2 is nowhere near enough to claim the violation rate has genuinely \
+dropped with statistical confidence - it needs the same multi-day \
+`--resume` accumulation as every other agent-level metric before that \
+claim can be made properly. MLflow's `prompt_version` parameter makes the \
+v2-vs-v3 comparison queryable once enough v3 data exists on the same \
+provider.
 """
 
 
@@ -373,13 +416,18 @@ def write_eval_results_doc(results: list[PatientEvalResult], metrics: dict, out_
     lines.append("| Metric | Value |")
     lines.append("|---|---|")
     lines.append(f"| Hallucination rate (uncited/fabricated claims) | {metrics['hallucination_rate']:.1%} ({metrics['total_hallucinations']}/{metrics['total_raw_findings']} findings) |")
-    lines.append(f"| Schema violation rate (real, cited claim; invalid field) | {metrics['schema_violation_rate']:.1%} ({metrics['total_schema_violations']}/{metrics['total_raw_findings']} findings) |")
+    lines.append(f"| Schema violation rate (real, cited claim; invalid field, rejected) | {metrics['schema_violation_rate']:.1%} ({metrics['total_schema_violations']}/{metrics['total_raw_findings']} findings) |")
+    lines.append(f"| Severity coercion rate (near-miss value corrected, accepted) | {metrics['coercion_rate']:.1%} ({metrics['total_coerced_severities']}/{metrics['total_raw_findings']} findings) |")
     lines.append(f"| Citation validity | {metrics['citation_validity']:.1%} |")
     lines.append(f"| Patient leakage | {metrics['patient_leakage_count']} (must be 0) |")
     lines.append(f"| Latency p50 | {metrics['latency_p50']:.2f}s |")
     lines.append(f"| Latency p95 | {metrics['latency_p95']:.2f}s |")
     lines.append(f"| Patients completed | {metrics['n_completed']} (target >=100{'  - still accumulating' if metrics['n_completed'] < 100 else ''}) |")
     lines.append(f"| Patients errored this checkpoint | {metrics['n_errors']} |")
+    if metrics.get("n_given_up"):
+        lines.append(
+            f"| Patients given up on (hit --max-retries-per-patient) | {metrics['n_given_up']} |"
+        )
     lines.append("")
 
     if metrics["latency_p95"] >= 30:
@@ -420,6 +468,23 @@ def write_eval_results_doc(results: list[PatientEvalResult], metrics: dict, out_
         for statement, reason, category in r.rejected:
             if category == "schema_violation":
                 lines.append(f"  - `{statement!r}` — rejected: {reason}")
+    lines.append("")
+
+    lines.append("### Severity coercions (near-miss value corrected, not rejected)")
+    lines.append("")
+    lines.append(
+        "Not a failure - these findings were accepted, with a known synonym (e.g. `'info'`, `'moderate'`) "
+        "normalized to the exact enum value before validation (see guardrails.py's `_SEVERITY_SYNONYMS`). "
+        "Tracked separately to show how often correction was still needed even after PROMPT_VERSION v3 "
+        "spelled out the three allowed values explicitly."
+    )
+    lines.append("")
+    if not failures["coercions"]:
+        lines.append("None in this run - every accepted finding used an exact enum value with no correction needed.")
+    for r in failures["coercions"]:
+        lines.append(f"- **{r.patient_id}**: {r.coerced_severity_count} of {r.raw_finding_count} raw findings had their severity corrected.")
+        for statement, original, normalized in r.coerced_severities:
+            lines.append(f"  - `{statement!r}` — {original!r} -> {normalized!r}")
     lines.append("")
 
     lines.append("### Failure examples: cross-patient citation leakage")
@@ -496,6 +561,16 @@ def main() -> None:
         help="Stop early after this many consecutive new (non-checkpointed) errors - almost always a "
         "persistent provider quota wall, not a transient blip. Re-run with --resume once quota resets.",
     )
+    parser.add_argument(
+        "--max-retries-per-patient",
+        type=int,
+        default=3,
+        help="Give up on a patient after this many cumulative failed attempts across all --resume "
+        "sessions, rather than retrying it forever. A patient that fails 3 days running is more likely a "
+        "patient-specific problem than bad luck on the quota wall, and retrying it indefinitely would keep "
+        "spending part of every day's limited budget on a probable lost cause instead of a never-attempted "
+        "patient.",
+    )
     args = parser.parse_args()
 
     if args.llm_provider:
@@ -525,17 +600,46 @@ def main() -> None:
 
     app = build_graph()
 
-    results: list[PatientEvalResult] = []
-    consecutive_new_errors = 0
-    for i, patient_id in enumerate(selected, 1):
+    # Partition, don't just iterate in selection order: a never-attempted
+    # patient is pure upside (progress toward n_completed either way), while
+    # retrying a prior error re-spends budget on a patient that has already
+    # shown it might fail again for the same persistent reason (a quota
+    # wall doesn't clear up mid-session). Processing never-attempted first
+    # means a session cut short by the wall still maximizes progress,
+    # instead of burning the day's budget re-trying yesterday's failures
+    # before ever reaching a fresh patient.
+    done: list[str] = []
+    given_up: list[str] = []
+    never_attempted: list[str] = []
+    retryable: list[str] = []
+    for patient_id in selected:
         cached = checkpoint.get(patient_id)
-        if cached is not None and cached.error is None:
-            print(f"[{i}/{len(selected)}] {patient_id} - already completed, reusing checkpoint")
-            results.append(cached)
-            continue
+        if cached is None:
+            never_attempted.append(patient_id)
+        elif cached.error is None:
+            done.append(patient_id)
+        elif cached.attempts >= args.max_retries_per_patient:
+            given_up.append(patient_id)
+        else:
+            retryable.append(patient_id)
 
-        print(f"[{i}/{len(selected)}] {patient_id}")
+    if given_up:
+        print(
+            f"{len(given_up)} patient(s) already failed --max-retries-per-patient="
+            f"{args.max_retries_per_patient} times and will not be retried: {given_up}"
+        )
+
+    results: list[PatientEvalResult] = [checkpoint[pid] for pid in done] + [checkpoint[pid] for pid in given_up]
+    to_process = never_attempted + retryable
+    print(f"{len(done)} already done, {len(given_up)} given up, {len(to_process)} to process this session "
+          f"({len(never_attempted)} never attempted, {len(retryable)} retrying a prior error)")
+
+    consecutive_new_errors = 0
+    for i, patient_id in enumerate(to_process, 1):
+        prior_attempts = checkpoint[patient_id].attempts if patient_id in checkpoint else 0
+        print(f"[{i}/{len(to_process)}] {patient_id}" + (f" (retry, attempt {prior_attempts + 1})" if prior_attempts else ""))
         result = evaluate_one_patient(engine, app, patient_id)
+        result.attempts = prior_attempts + 1
         results.append(result)
         checkpoint[patient_id] = result
         save_checkpoint(checkpoint_path, checkpoint)
@@ -557,6 +661,7 @@ def main() -> None:
             time.sleep(args.pace_seconds)
 
     metrics = aggregate(results)
+    metrics["n_given_up"] = len(given_up)
     print()
     print(json.dumps(metrics, indent=2))
 
@@ -572,9 +677,12 @@ def main() -> None:
         mlflow.log_param("seed", args.seed)
         mlflow.log_param("n_completed", metrics["n_completed"])
         mlflow.log_param("n_errors", metrics["n_errors"])
+        mlflow.log_param("n_given_up", metrics["n_given_up"])
+        mlflow.log_param("max_retries_per_patient", args.max_retries_per_patient)
         for key in (
             "hallucination_rate",
             "schema_violation_rate",
+            "coercion_rate",
             "citation_validity",
             "patient_leakage_count",
             "latency_p50",

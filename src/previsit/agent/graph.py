@@ -51,6 +51,7 @@ class AgentState(TypedDict, total=False):
     hallucination_count: int
     schema_violation_count: int
     rejected_findings: list[dict]
+    coerced_severities: list[dict]
     card: PreVisitCard
 
 
@@ -226,6 +227,10 @@ def apply_guardrail(state: AgentState) -> dict:
         "schema_violation_count": result.schema_violation_count,
         "rejected_findings": [
             {"raw": r.raw, "reason": r.reason, "category": r.category} for r in result.rejected
+        ],
+        "coerced_severities": [
+            {"statement": c.statement, "original_value": c.original_value, "normalized_value": c.normalized_value}
+            for c in result.coerced
         ],
     }
 
