@@ -12,8 +12,13 @@ from previsit.agent.graph import (
     build_graph,
     gather_structured_data,
 )
+from previsit.config import settings
 from previsit.ingest.loader import get_engine
 from previsit.models import Gap, PatientSummary
+
+requires_llm = pytest.mark.skipif(
+    not settings.gemini_api_key, reason="requires a live GEMINI_API_KEY"
+)
 
 
 @pytest.fixture(scope="module")
@@ -155,3 +160,26 @@ def test_search_notes_tool_does_not_expose_patient_id_to_the_llm():
     schema_fields = set(tool_fn.args_schema.model_fields.keys())
     assert schema_fields == {"query"}
     assert "patient_id" not in schema_fields
+
+
+@requires_llm
+def test_maybe_search_notes_fires_for_a_documentation_gap(engine):
+    """Regression test for a real bug: the original maybe_search_notes
+    prompt let the model draft the entire card as prose in this turn
+    instead of making a narrow tool/no-tool decision, so it always judged
+    its own draft "sufficient" and never searched. Uses a known real
+    patient (from the main dataset, not a fixture) who has a documentation
+    gap - "Tingling in Hands and Feet" recurring without diabetic
+    neuropathy coded - which is exactly the case where a supporting quote
+    from the actual notes should be worth fetching."""
+    from previsit.agent.graph import gather_structured_data, maybe_search_notes
+
+    patient_id = "00f38a8f-fd21-a608-0d0d-a37e6bdf5696"
+    state = {"patient_id": patient_id, "engine": engine}
+    state.update(gather_structured_data(state))
+    assert state["documentation_gaps"], "fixture assumption broken: this patient should have a documentation gap"
+
+    updates = maybe_search_notes(state)
+
+    assert len(updates["note_chunks"]) > 0
+    assert all(chunk.patient_id == patient_id for chunk in updates["note_chunks"])
