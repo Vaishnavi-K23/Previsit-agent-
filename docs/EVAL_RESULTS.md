@@ -74,8 +74,8 @@ Generated 2026-08-25T20:00:59.126873Z by `python -m eval.mutation_test_determini
 
 Investigated: 0 patients in this dataset have SNOMED 368581000119106 as their ONLY diabetes-qualifying evidence - every patient carrying it also has the base diagnosis, another complication code, or active insulin, so removing it from one rule's list changes nothing for anyone. This is a dataset-redundancy artifact, not a gap in the check's sensitivity: mutating a value that happens to be fully redundant in the current Synthea generation can't produce a detectable difference no matter how correct the detection logic is. A hand-built fixture patient (analogous to eval/fixtures/) whose only diabetes evidence is this one code would close this specific coverage gap.
 
-**2 of 3 mutations caught.** Not summarized away: 1 missed.
-1 of the misses were investigated and traced to dataset redundancy (see above) - the mutated value never happens to be load-bearing for any real patient in the current Synthea generation, so no discrepancy was possible regardless of check sensitivity. Still a real coverage gap worth closing with a targeted fixture, just not evidence the check itself is broken.
+**3 mutations tested: 2 caught, 1 provably a no-op on this dataset.** Not summarized away.
+The one not caught was investigated and traced to dataset redundancy (see above) - the mutated value never happens to be load-bearing for any real patient in the current Synthea generation, so no discrepancy was possible regardless of check sensitivity. Still a real coverage gap worth closing with a targeted fixture, just not evidence the check itself is broken.
 
 Post-mutation-testing re-check: engine restored cleanly, 0 discrepancies.
 
