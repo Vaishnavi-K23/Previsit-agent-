@@ -13,10 +13,6 @@ The agent generates a citation-backed pre-visit summary for a clinician about to
 
 **Skills demonstrated:** LLM agent orchestration (LangGraph, multi-step tool-calling graphs) · prompt engineering with a citation/hallucination guardrail · independent evaluation design (ground truth re-implemented from scratch, mutation testing, deterministic-vs-agent-level metric separation) · relational + vector data modeling (SQL Server, Qdrant) · FastAPI, MCP server, and Streamlit interfaces over one shared agent · MLflow experiment tracking · Docker Compose local infra with a documented Azure production mapping · CI (GitHub Actions: lint, test, end-to-end smoke test).
 
-## Screenshot
-
-> **Not included - disclosed, not skipped.** This environment has no browser or screen-capture tool available to the assistant that built this project, so a real screenshot could not be produced here. Run the Quickstart below, open the Streamlit UI, generate a card, and expand a citation - what you'll see is a finding's statement next to an expandable panel that re-queries and displays the exact database row backing it. That expandable citation is the actual demo moment this section would show.
-
 ## Eval results (above the fold - full detail in [docs/EVAL_RESULTS.md](docs/EVAL_RESULTS.md))
 
 Two tables, deliberately kept separate: gap recall/precision are a property of the deterministic SQL engine and cost nothing to measure at full population scale; hallucination rate, schema violations, and latency require a live LLM call and are rate-limited by free-tier quotas. Conflating them into one number would either hide the free eval behind the expensive one, or let the expensive one borrow the free one's scale.
