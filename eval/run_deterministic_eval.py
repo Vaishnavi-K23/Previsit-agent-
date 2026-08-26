@@ -5,7 +5,7 @@ Synthea-generated dataset (not eval/fixtures/, which is a separate,
 hand-built set kept out of this comparison on purpose - see
 docs/EVAL_RESULTS.md's background note on why those exist).
 
-Per SPEC.md, the LLM never decides whether a screening is due - that
+By design, the LLM never decides whether a screening is due - that
 decision is entirely the deterministic SQL layer's, so gap recall/precision
 is a property of that layer alone and can be measured with zero LLM calls,
 against the full population, for free. This is deliberately kept separate

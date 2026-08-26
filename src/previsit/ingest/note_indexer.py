@@ -3,7 +3,7 @@ embeds locally, and indexes into Qdrant for semantic search (Phase 5's
 search_notes tool).
 
 Source of narrative text: DocumentReference resources only - verified
-empirically (not per SPEC.md's literal wording, which anticipated needing
+empirically (not the originally-anticipated design, which expected needing
 DiagnosticReport.conclusion too):
   - DiagnosticReport.conclusion is empty in all 152,112 reports in this
     dataset (confirmed in Phase 1).

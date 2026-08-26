@@ -335,8 +335,8 @@ def parse_bundle(bundle: dict) -> ParsedBundle:
     """Parses one Synthea patient bundle into row lists per target table.
 
     Resource types outside the 8 tracked ones (Claim, ExplanationOfBenefit,
-    SupplyDelivery, Device, ...) are intentionally ignored - not in SPEC.md's
-    table list, not needed for care-gap detection or citations.
+    SupplyDelivery, Device, ...) are intentionally ignored - not in this
+    project's table list, not needed for care-gap detection or citations.
     """
     result: ParsedBundle = {k: [] for k in _EMPTY_BUNDLE}  # type: ignore[assignment]
 

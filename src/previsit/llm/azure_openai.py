@@ -1,9 +1,9 @@
 """Azure OpenAI provider - implemented but not used by default. Exists to
 prove the swappable-provider claim: switching to it is setting
 LLM_PROVIDER=azure_openai plus the four AZURE_OPENAI_* variables in .env,
-never a code change. Requires an actual Azure subscription - per SPEC.md's
-zero-paid-services rule, this is never selected without you explicitly
-choosing to pay for Azure.
+never a code change. Requires an actual Azure subscription - per this
+project's zero-paid-services rule, this is never selected without you
+explicitly choosing to pay for Azure.
 """
 
 from langchain_openai import AzureChatOpenAI

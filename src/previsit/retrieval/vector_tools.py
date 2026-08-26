@@ -3,10 +3,9 @@
 The single most important property of this module: `patient_id` is a
 required argument to search_notes, and the filter is applied by Qdrant
 itself via `query_filter` - not by fetching top-k globally and discarding
-non-matching rows in Python afterward. Cross-patient leakage is, per
-SPEC.md, the single worst bug this system could have, so the guarantee has
-to live at the database query level, where nothing downstream can forget
-to apply it.
+non-matching rows in Python afterward. Cross-patient leakage is the single
+worst bug this system could have, so the guarantee has to live at the
+database query level, where nothing downstream can forget to apply it.
 """
 
 from qdrant_client import QdrantClient

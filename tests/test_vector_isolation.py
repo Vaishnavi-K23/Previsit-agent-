@@ -1,7 +1,7 @@
 """Cross-patient leakage test for vector search.
 
-Per SPEC.md: "Cross-patient leakage is the single worst bug this system
-could have." This test proves it directly rather than trusting the query
+Cross-patient leakage is the single worst bug this system could have.
+This test proves it directly rather than trusting the query
 filter code by inspection - it indexes two patients with text near-
 guaranteed to rank each other highly on a naive (unfiltered) search, then
 asserts patient A's search never returns even one chunk belonging to

@@ -1,7 +1,7 @@
 """Phase 1 inventory: inspects the actual Synthea FHIR output on disk and
 reports what's really there.
 
-Per SPEC.md, clinical codes are never hardcoded from memory — this script
+Clinical codes are never hardcoded from memory in this project - this script
 walks the generated JSON, tallies every resource type and every code
 actually present, and writes the results to docs/DATA_MODEL.md. Whatever
 codes Synthea's current version happens to use is what ends up documented.
@@ -155,7 +155,7 @@ def write_data_model_doc(inventory: dict, out_path: Path, source_dir: Path) -> N
     lines.append(
         "> Generated empirically by `python -m previsit.ingest.inspect_output` "
         f"from the actual FHIR bundles in `{source_dir.as_posix()}`. Nothing below is "
-        "hardcoded from memory or from SPEC.md — every code and count reflects "
+        "hardcoded from memory — every code and count reflects "
         "what this run of Synthea actually produced."
     )
     lines.append("")

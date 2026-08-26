@@ -86,8 +86,8 @@ def test_valid_citation_for_correct_patient_accepted(engine, two_patients, clean
 
 
 def test_fabricated_citation_rejected(engine, two_patients, cleanup):
-    """The prompt-injection case SPEC.md explicitly calls out: an LLM
-    asserting a claim with a citation id that doesn't exist anywhere."""
+    """The prompt-injection case this project explicitly guards against: an
+    LLM asserting a claim with a citation id that doesn't exist anywhere."""
     patient_a, _ = two_patients
     _insert_patient(engine, patient_a)
 

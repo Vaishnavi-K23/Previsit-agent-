@@ -1,6 +1,6 @@
 # Data Model — Discovered Resource Types and Codes
 
-> Generated empirically by `python -m previsit.ingest.inspect_output` from the actual FHIR bundles in `data/synthea_output/fhir`. Nothing below is hardcoded from memory or from SPEC.md — every code and count reflects what this run of Synthea actually produced.
+> Generated empirically by `python -m previsit.ingest.inspect_output` from the actual FHIR bundles in `data/synthea_output/fhir`. Nothing below is hardcoded from memory — every code and count reflects what this run of Synthea actually produced.
 
 **Patient-level bundles:** 1175
 
