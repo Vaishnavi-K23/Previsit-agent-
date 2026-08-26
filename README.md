@@ -13,7 +13,7 @@ The agent generates a citation-backed pre-visit summary for a clinician about to
 
 **Skills demonstrated:** LLM agent orchestration (LangGraph, multi-step tool-calling graphs) · prompt engineering with a citation/hallucination guardrail · independent evaluation design (ground truth re-implemented from scratch, mutation testing, deterministic-vs-agent-level metric separation) · relational + vector data modeling (SQL Server, Qdrant) · FastAPI, MCP server, and Streamlit interfaces over one shared agent · MLflow experiment tracking · Docker Compose local infra with a documented Azure production mapping · CI (GitHub Actions: lint, test, end-to-end smoke test).
 
-Built with Claude Code from a spec I wrote (`SPEC.md`). I defined the phase gates and acceptance checks and drove the validation work throughout; implementation was agent-assisted.
+Built with Claude Code from a detailed phase-by-phase spec I wrote. I defined the phase gates and acceptance checks and drove the validation work throughout; implementation was agent-assisted.
 
 ## Eval results (above the fold - full detail in [docs/EVAL_RESULTS.md](docs/EVAL_RESULTS.md))
 
