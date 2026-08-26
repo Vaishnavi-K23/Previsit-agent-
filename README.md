@@ -1,5 +1,6 @@
 # Pre-Visit Clinical Intelligence Agent
 
+[![CI](https://github.com/Vaishnavi-K23/Previsit-agent-/actions/workflows/ci.yml/badge.svg)](https://github.com/Vaishnavi-K23/Previsit-agent-/actions/workflows/ci.yml)
 ![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue)
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
 ![Data: 100% Synthetic](https://img.shields.io/badge/data-100%25%20synthetic-orange)
