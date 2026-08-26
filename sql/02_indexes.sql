@@ -1,8 +1,8 @@
 -- Performance indexes. Every fact table gets a patient_id index (every
 -- query in this system starts from "give me everything for patient X").
 -- Condition, Observation, and Procedure additionally get a (patient_id, code)
--- composite index per SPEC.md, since Phase 3's care-gap rules filter on
--- exactly that pair (e.g. "this patient's HbA1c observations").
+-- composite index, since the care-gap rules filter on exactly that pair
+-- (e.g. "this patient's HbA1c observations").
 
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_fact_condition_patient')
 CREATE INDEX IX_fact_condition_patient ON fact_condition (patient_id);

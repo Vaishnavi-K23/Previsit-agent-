@@ -1,6 +1,6 @@
 """Phase 6 agent-level eval harness: runs the full agent (Phase 5) against a
 sample of patients and scores the things that genuinely require a live LLM
-call. Gap recall/precision do NOT belong here - per SPEC.md the LLM never
+call. Gap recall/precision do NOT belong here - by design the LLM never
 decides whether a screening is due, so that's a property of the
 deterministic SQL engine (sql/gaps/*.sql), and eval/run_deterministic_eval.py
 scores it against eval/ground_truth.py for free, across the full population,
@@ -549,7 +549,7 @@ def write_eval_results_doc(out_path: Path, results_dir: Path = Path("eval/result
     recently". See _render_checkpoint_block and discover_agent_checkpoints."""
     lines = [AGENT_START, "", "## Agent-level metrics (live LLM runs)", ""]
     lines.append(
-        "Gap recall/precision do NOT appear here - per SPEC.md the LLM never decides whether a screening "
+        "Gap recall/precision do NOT appear here - by design the LLM never decides whether a screening "
         "is due, so that's a property of the deterministic SQL engine (see the Deterministic section "
         "above), scored there for free across the full population. Everything below genuinely requires a "
         "live agent turn: hallucination rate, schema violation rate, severity coercion rate, citation "

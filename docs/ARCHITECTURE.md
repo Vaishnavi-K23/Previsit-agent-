@@ -1,14 +1,13 @@
 # Architecture
 
-> This file is a Phase 8 deliverable per SPEC.md and will hold the full
-> system architecture (diagram, component responsibilities, data flow)
-> once the agent and API layers exist. It's started early to record one
-> finding, made while designing Phase 5's `find_documentation_gaps` tool,
-> that shapes that tool's design and shouldn't get lost by Phase 8.
+> This file was started early in the project to record one finding, made
+> while designing the `find_documentation_gaps` tool, that shapes that
+> tool's design - see README.md's Architecture section for the full
+> system diagram.
 
 ## The "History of Present Illness" section is circular for documentation-gap detection
 
-`find_documentation_gaps` is specced (SPEC.md Phase 5) to find conditions
+`find_documentation_gaps` was designed to find conditions
 "mentioned in notes but not on the coded problem list." The obvious first
 approach - scan each note's free-text body for condition mentions and check
 whether they're coded - doesn't work on this dataset, and the reason is

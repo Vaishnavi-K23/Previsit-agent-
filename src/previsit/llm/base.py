@@ -1,5 +1,5 @@
 """Provider abstraction. Switching LLM backends is a `settings.llm_provider`
-config change, never a code change - SPEC.md non-negotiable #7.
+config change, never a code change - a hard requirement for this project.
 
 Returns a LangChain BaseChatModel so graph.py can use LangGraph's normal
 `.bind_tools()` / `.with_structured_output()` patterns regardless of which

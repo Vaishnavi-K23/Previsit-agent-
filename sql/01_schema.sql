@@ -1,5 +1,5 @@
 -- Phase 2 relational schema. Every table carries source_resource_id (the
--- original FHIR resource id) and ingested_at, per SPEC.md's citation
+-- original FHIR resource id) and ingested_at, per the project's citation
 -- requirement: every claim the agent makes must trace back to a specific
 -- record, and this is the column that trace points to.
 --

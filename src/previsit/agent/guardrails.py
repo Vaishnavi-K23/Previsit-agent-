@@ -1,5 +1,5 @@
 """Citation guardrail: the one place a Finding's claims get checked against
-ground truth before a PreVisitCard ever reaches a human. Per SPEC.md: reject
+ground truth before a PreVisitCard ever reaches a human. Rule: reject
 any Finding with an empty source_resource_ids, verify every cited id
 actually exists in the database, verify the cited record belongs to the
 correct patient. On failure, drop the finding, log it, and count it as a

@@ -4,8 +4,8 @@ Deliberately independent of previsit.gaps (the SQL engine) end to end: its
 own FHIR field extraction, its own per-rule logic, re-derived from scratch
 rather than imported. If both paths were written the same way, agreement
 between them would only prove a bug is consistent, not that either is
-correct - see SPEC.md Phase 6. The two paths are allowed to duplicate raw
-DATA FACTS (the SNOMED/LOINC/RxNorm codes themselves, empirically confirmed
+correct - that's the whole point of this module. The two paths are
+allowed to duplicate raw DATA FACTS (the SNOMED/LOINC/RxNorm codes themselves, empirically confirmed
 in docs/DATA_MODEL.md) since those aren't the thing being verified; what's
 independent is how those facts get turned into a gap decision.
 

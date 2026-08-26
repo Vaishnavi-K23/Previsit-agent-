@@ -1,6 +1,6 @@
 """The five tools the LangGraph agent (graph.py) can call. Every one of
 these is pure SQL/Qdrant retrieval or the deterministic Phase 3 gap engine -
-per SPEC.md, the LLM never computes a date, decides a threshold, or judges
+by design, the LLM never computes a date, decides a threshold, or judges
 whether a screening is due. Its job is composing a card from what these
 tools return, nothing here computes on its behalf.
 """

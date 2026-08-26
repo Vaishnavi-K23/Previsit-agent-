@@ -9,8 +9,8 @@ column (e.g. `display` text) when row lengths vary a lot, as ours do.
 SQLAlchemy's mssql+pyodbc dialect handles this correctly.
 
 Idempotency strategy: full wipe-and-reload, not merge/upsert. Simpler,
-and the acceptance bar (SPEC.md Phase 2) is just "loading twice produces
-identical row counts" - a full refresh trivially satisfies that. Fact
+and the acceptance bar is just "loading twice produces identical row
+counts" - a full refresh trivially satisfies that. Fact
 tables have no incoming foreign keys, so they TRUNCATE; dim_patient is
 FK-referenced by all of them, and SQL Server disallows TRUNCATE on a
 table any FK references (regardless of whether the referencing tables

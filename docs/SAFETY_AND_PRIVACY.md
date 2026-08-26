@@ -1,6 +1,6 @@
 # Safety and Privacy
 
-This document covers five things per `SPEC.md` Phase 8: the synthetic-data
+This document covers five things: the synthetic-data
 boundary, why no PHI would reach an external inference endpoint in a
 production design, audit logging of model calls, human-in-the-loop
 confirmation before anything enters a chart, and the deliberate choice not
@@ -113,5 +113,5 @@ asserts the word "add" never appears in a documentation-gap's detail
 text). The reasoning: a documentation gap is evidence for a human to
 review, and turning it into a coding suggestion would put the agent in the
 position of practicing medicine (or billing) rather than surfacing
-information a clinician can act on - exactly the line `SPEC.md`'s "Things
-to explicitly NOT do" draws.
+information a clinician can act on - exactly the line this project draws
+around what the agent is and isn't allowed to do.

@@ -1,6 +1,6 @@
 """Runs each sql/gaps/*.sql rule and returns typed Gap objects. No clinical
 judgment happens in Python here - every rule is a plain parameterized SQL
-query; this module just executes them and shapes the rows. Per SPEC.md, the
+query; this module just executes them and shapes the rows. By design, the
 LLM never decides whether a screening is due - this is the deterministic core
 that decision comes from.
 """
