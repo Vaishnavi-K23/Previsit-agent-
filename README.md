@@ -13,9 +13,7 @@ The agent generates a citation-backed pre-visit summary for a clinician about to
 
 **Skills demonstrated:** LLM agent orchestration (LangGraph, multi-step tool-calling graphs) · prompt engineering with a citation/hallucination guardrail · independent evaluation design (ground truth re-implemented from scratch, mutation testing, deterministic-vs-agent-level metric separation) · relational + vector data modeling (SQL Server, Qdrant) · FastAPI, MCP server, and Streamlit interfaces over one shared agent · MLflow experiment tracking · Docker Compose local infra with a documented Azure production mapping · CI (GitHub Actions: lint, test, end-to-end smoke test).
 
-## Screenshot
-
-> **Not included - disclosed, not skipped.** This environment has no browser or screen-capture tool available to the assistant that built this project, so a real screenshot could not be produced here. Run the Quickstart below, open the Streamlit UI, generate a card, and expand a citation - what you'll see is a finding's statement next to an expandable panel that re-queries and displays the exact database row backing it. That expandable citation is the actual demo moment this section would show.
+Built with Claude Code from a spec I wrote (`SPEC.md`). I defined the phase gates and acceptance checks and drove the validation work throughout; implementation was agent-assisted.
 
 ## Eval results (above the fold - full detail in [docs/EVAL_RESULTS.md](docs/EVAL_RESULTS.md))
 
@@ -30,7 +28,7 @@ Two tables, deliberately kept separate: gap recall/precision are a property of t
 | Gap precision | 100.0% (576/576) |
 | Exact gap-set agreement | 100.0% (1,175/1,175 patients) |
 | Discrepancies | 0 |
-| Mutation testing | 2 of 3 deliberate breaks caught (see [below](#what-validation-uncovered)) |
+| Mutation testing | 3 mutations tested; 2 caught, 1 provably a no-op on this dataset (see [below](#what-validation-uncovered)) |
 
 **Agent-level (live LLM calls, accumulates via `--resume` across multiple days)**
 
@@ -160,6 +158,8 @@ flowchart LR
     card --> mcp
     card --> ui
 ```
+
+**EHR portability.** `previsit.ingest.fhir_parser` parses standard FHIR R4 resource JSON (`Patient`, `Condition`, `Observation`, `MedicationRequest`, `Encounter`, `Procedure`, `DiagnosticReport`, `Immunization`, `DocumentReference`) - the same resource shapes a real EHR's FHIR API returns, not a Synthea-specific format. A real deployment would swap `previsit.ingest.synthea_runner` and the local-file bundle loader in `previsit.ingest.loader` for a FHIR REST API client against a live endpoint; the per-resource field extraction in `fhir_parser.py` is the part that's reusable, not the "read a local JSON file" mechanism around it. The relational layer's `dim_*`/`fact_*` star-schema tables map conceptually onto the same kind of dimensional model Epic's Clarity and Caboodle reporting databases use for patients, diagnoses, and encounters. To be precise about what this claim is and isn't: the resource model transfers - **no live FHIR endpoint or real EHR has been integrated with this project**, and that would be real, untested integration work, not a configuration change.
 
 ## Stack, and its Azure production equivalent
 

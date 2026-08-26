@@ -263,10 +263,15 @@ def write_section(summary: dict, as_of: datetime, out_path: Path) -> None:
         explained = [r for r in missed if r.get("investigation", "").startswith("Investigated: 0")]
         unexplained = [r for r in missed if r not in explained]
         n_caught = len(summary["mutations"]) - len(missed)
-        lines.append(
-            f"**{n_caught} of {len(summary['mutations'])} mutations caught.** Not summarized away: "
-            f"{len(missed)} missed."
-        )
+        # Lead with the total and split caught vs. explained-no-op vs. unexplained, rather
+        # than "N of M caught" - which reads as a failing score at a glance even when the
+        # "misses" are provably no-ops on this dataset, not check failures.
+        parts = [f"{n_caught} caught"]
+        if explained:
+            parts.append(f"{len(explained)} provably a no-op on this dataset")
+        if unexplained:
+            parts.append(f"{len(unexplained)} unexplained")
+        lines.append(f"**{len(summary['mutations'])} mutations tested: {', '.join(parts)}.** Not summarized away.")
         if explained:
             lines.append(
                 f"{len(explained)} of the misses were investigated and traced to dataset redundancy (see "
