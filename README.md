@@ -145,9 +145,9 @@ flowchart LR
         gt["eval/ground_truth.py<br/>from-scratch reimplementation"]
         mut["mutation testing"]
     end
-    gt -.verifies.-> rules
-    mut -.breaks & confirms detection.-> rules
-    guard -.scored by.-> gt
+    gt -.->|verifies| rules
+    mut -.->|breaks and confirms detection| rules
+    guard -.->|scored by| gt
 
     subgraph interfaces["Interfaces (Phase 7)"]
         api["FastAPI"]
