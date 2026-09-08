@@ -16,7 +16,15 @@ this prompt exists to keep the LLM from adding anything on top of that.
 # "informational", "info") instead of the exact enum when told to "use your
 # judgment" with no further guidance. Spelled out the three allowed values
 # and a concrete mapping for recent_event specifically.
-PROMPT_VERSION = "v3"
+# v4: get_recent_encounters used to return every encounter in the 12-month
+# window (one patient in the dataset has 120), leaving it to the model's own
+# reading of "especially an ED visit with no follow-up" to decide which of
+# however many to narrate - undetermined, untested behavior on any patient
+# with a lot of visits. Which encounters count as notable (ED visit/admission
+# with no follow-up since) is now decided in SQL (agent/tools.py); the
+# routine rest is passed as a bare count. Prompt updated to match: recent_event
+# is now pure narration of an already-filtered list, not a judgment call.
+PROMPT_VERSION = "v4"
 
 SYSTEM_PROMPT = """\
 You are a clinical documentation assistant. You prepare a "pre-visit card" \
@@ -56,20 +64,29 @@ structured finding needs supporting context, not as a first step.
 Produce findings in exactly these four categories: care_gap (from \
 check_care_gaps), uncontrolled_condition (a Gap whose title indicates a \
 value is out of range, e.g. blood pressure or A1c), documentation_gap \
-(from find_documentation_gaps), recent_event (from get_recent_encounters - \
-especially an ED visit with no follow-up encounter since). Assign severity \
-exactly as the source tool reported it where applicable (Gap.severity).
+(from find_documentation_gaps), recent_event (from get_recent_encounters). \
+Assign severity exactly as the source tool reported it where applicable \
+(Gap.severity).
+
+get_recent_encounters already decided which encounters are notable enough \
+to report - it only returns an ED visit or hospital admission that has had \
+no follow-up encounter of any kind since. Every encounter it returns to you \
+IS a recent_event finding; you are not deciding which ones count, only \
+phrasing what's already been selected. A routine-encounter count may be \
+listed alongside them (e.g. "12 additional routine visits in the last 12 \
+months") - that count is context only, never a finding of its own: it has \
+no source_resource_id to cite, so do not turn it into a recent_event (or \
+any) finding, just fold it into the one-line summary or another finding's \
+statement if it's worth mentioning at all.
 
 recent_event findings have no tool-assigned severity, so you must choose \
 one yourself - but the value MUST be exactly one of these three words, \
 nothing else: "high", "medium", or "low". Never write a synonym like \
 "moderate", "informational", "info", "urgent", or "critical" - the field \
 only accepts these three exact values and anything else is rejected \
-outright. Use this mapping: "high" for an ED visit, hospital admission, or \
-urgent/emergent encounter with no documented follow-up since; "medium" for \
-a specialist or urgent-care visit that's routine but still worth a \
-provider's attention; "low" for an ambulatory check-up, wellness visit, or \
-other routine encounter with nothing outstanding.
+outright. Every recent_event you receive is already an ED visit or \
+admission with no follow-up since - use "high" for an emergency or \
+inpatient admission, "medium" for any other case in this same list.
 
 Write a one-line summary a provider can read before walking in - plain \
 language, no jargon, no invented detail beyond what the findings state.

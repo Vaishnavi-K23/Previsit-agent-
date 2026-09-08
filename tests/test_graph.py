@@ -73,6 +73,7 @@ def test_gather_structured_data_populates_all_four_tool_results(engine, patient_
     assert isinstance(updates["patient_summary"], PatientSummary)
     assert isinstance(updates["gaps"], list)
     assert isinstance(updates["recent_encounters"], list)
+    assert isinstance(updates["routine_encounter_count"], int)
     assert isinstance(updates["documentation_gaps"], list)
 
 
@@ -148,6 +149,35 @@ def test_format_structured_context_includes_gap_and_citation(engine, patient_id,
     assert "A1c not tested" in context
     assert "cond-123" in context
     assert "Diabetes mellitus type 2" in context
+
+
+def test_format_structured_context_reports_routine_encounter_count_without_enumerating(
+    engine, patient_id, cleanup
+):
+    _insert_patient(engine, patient_id)
+    summary = PatientSummary(
+        patient_id=patient_id,
+        source_resource_id=patient_id,
+        birth_date=date(1970, 1, 1),
+        age=55,
+        gender="female",
+        deceased_flag=False,
+        city="Test City",
+        state="AZ",
+        active_conditions=[],
+        active_medications=[],
+        latest_vitals={},
+    )
+    state: AgentState = {
+        "patient_id": patient_id,
+        "patient_summary": summary,
+        "recent_encounters": [],
+        "routine_encounter_count": 117,
+    }
+
+    context = _format_structured_context(state)
+
+    assert "117 additional routine encounter(s)" in context
 
 
 def test_search_notes_tool_does_not_expose_patient_id_to_the_llm():

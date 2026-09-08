@@ -4,15 +4,15 @@
 
 ## Deterministic metrics (no LLM calls, full population)
 
-Generated 2026-08-25T19:27:15.358754Z by `python -m eval.run_deterministic_eval` (rules `v1`). Scores `previsit.gaps.engine.check_care_gaps` (the SQL rules engine the agent's tools call) against `eval/ground_truth.py`'s independently re-derived rule logic - a from-scratch FHIR parse and rule implementation that imports nothing from `previsit.gaps`, so agreement here means the two independent implementations of the *rule logic* agree, not that a shared bug is self-consistent. Every patient in the main dataset (not `eval/fixtures/`), zero LLM calls, costs nothing to re-run - the largest-n result in this project.
+Generated 2026-09-08T19:09:37.243652Z by `python -m eval.run_deterministic_eval` (rules `v1`). Scores `previsit.gaps.engine.check_care_gaps` (the SQL rules engine the agent's tools call) against `eval/ground_truth.py`'s independently re-derived rule logic - a from-scratch FHIR parse and rule implementation that imports nothing from `previsit.gaps`, so agreement here means the two independent implementations of the *rule logic* agree, not that a shared bug is self-consistent. Every patient in the main dataset (not `eval/fixtures/`), zero LLM calls, costs nothing to re-run - the largest-n result in this project.
 
 **Denominator: 1175 patients** - every patient present both in `dim_patient` (SQL, loaded) and with a matching FHIR bundle (ground truth, computable). Of these, 1000 are living and 175 are deceased; every rule in both implementations independently excludes deceased patients, so deceased patients contribute an empty gap set on both sides rather than being dropped from the denominator - their inclusion (0 discrepancies across all 175 of them) is itself part of what this check verifies, not a dilution of it. Gap recall/precision below are computed only over this evaluated population; the two coverage-gap states below it are tracked separately because each has a different cause than a rule-logic bug.
 
 | Metric | Value |
 |---|---|
 | Patients evaluated (denominator) | 1175 (1000 living + 175 deceased) |
-| Gap recall | 100.0% (576/576) |
-| Gap precision | 100.0% (576/576) |
+| Gap recall | 100.0% (578/578) |
+| Gap precision | 100.0% (578/578) |
 | Patients with exact agreement (identical gap set) | 100.0% (1175/1175) |
 
 ### Population coverage (three states, not collapsed into one mismatch count)
@@ -32,7 +32,7 @@ Invariant checked (asserted, not just observed): evaluated + ingestion-gap = 117
 | A1C_NOT_TESTED | 100.0% | 100.0% | 20 | 0 | 0 |
 | A1C_UNCONTROLLED | n/a (0 positives) | n/a (0 predicted) | 0 | 0 | 0 |
 | BP_UNCONTROLLED | 100.0% | 100.0% | 56 | 0 | 0 |
-| BREAST_CANCER_SCREENING_OVERDUE | 100.0% | 100.0% | 208 | 0 | 0 |
+| BREAST_CANCER_SCREENING_OVERDUE | 100.0% | 100.0% | 210 | 0 | 0 |
 | COLORECTAL_SCREENING_OVERDUE | 100.0% | 100.0% | 166 | 0 | 0 |
 | DIABETIC_EYE_EXAM_OVERDUE | 100.0% | 100.0% | 75 | 0 | 0 |
 | INFLUENZA_VACCINATION_OVERDUE | n/a (0 positives) | n/a (0 predicted) | 0 | 0 | 0 |
@@ -48,34 +48,36 @@ None - all 1175 patients' gap sets matched exactly between the two independent i
 
 ## Mutation testing (does a broken engine actually fail this check?)
 
-Generated 2026-08-25T20:00:59.126873Z by `python -m eval.mutation_test_deterministic`. The 100% agreement result above is only meaningful if a broken engine would score below 100% - otherwise the check could be passing because it isn't exercising the rule logic, not because the logic is correct. Each mutation below introduces one realistic, targeted break into a real `sql/gaps/*.sql` file, re-runs the deterministic comparison, and confirms `eval/ground_truth.py`'s independent implementation catches it - then reverts the file exactly before the next mutation runs (verified byte-for-byte, in a try/finally so a crash mid-mutation can't leave the repo broken). Baseline before mutating: 100.0% recall, 100.0% precision, 1175 patients, 0 discrepancies.
+Generated 2026-09-08T19:13:58.624182Z by `python -m eval.mutation_test_deterministic`. The 100% agreement result above is only meaningful if a broken engine would score below 100% - otherwise the check could be passing because it isn't exercising the rule logic, not because the logic is correct. Each mutation below introduces one realistic, targeted break into a real `sql/gaps/*.sql` file, re-runs the deterministic comparison, and confirms `eval/ground_truth.py`'s independent implementation catches it - then reverts the file exactly before the next mutation runs (verified byte-for-byte, in a try/finally so a crash mid-mutation can't leave the repo broken). Baseline before mutating: 100.0% recall, 100.0% precision, 1175 patients, 0 discrepancies.
 
 | Mutation | Caught? | Discrepancies | Recall | Precision |
 |---|---|---|---|---|
-| lookback_window_off_by_one_month | Yes | 3 | 100.0% | 99.5% |
+| lookback_window_off_by_one_month | Yes | 7 | 100.0% | 98.8% |
 | comparison_operator_flipped | Yes | 160 | 98.3% | 79.1% |
 | diabetes_complication_code_dropped | **NO - not caught** | 0 | 100.0% | 100.0% |
 
 **lookback_window_off_by_one_month** (`01_a1c_not_tested.sql`): A1C_NOT_TESTED's 12-month HbA1c lookback window narrowed to 11 months - a patient tested 11-12 months ago would now be wrongly flagged as overdue by the engine.
 
-- 98cfffd6-f33b-5bfd-0721-d9b12de391b3: ground truth ['DIABETIC_EYE_EXAM_OVERDUE'], mutated engine ['A1C_NOT_TESTED', 'DIABETIC_EYE_EXAM_OVERDUE']
+- 0e09c953-3d06-89cd-7e8c-2f1ec0d30f74: ground truth ['BP_UNCONTROLLED', 'DIABETIC_EYE_EXAM_OVERDUE', 'STATIN_GAP'], mutated engine ['A1C_NOT_TESTED', 'BP_UNCONTROLLED', 'DIABETIC_EYE_EXAM_OVERDUE', 'STATIN_GAP']
 - 16f07d04-e53c-70c9-b3a8-0797492a4b14: ground truth ['BP_UNCONTROLLED', 'DIABETIC_EYE_EXAM_OVERDUE'], mutated engine ['A1C_NOT_TESTED', 'BP_UNCONTROLLED', 'DIABETIC_EYE_EXAM_OVERDUE']
+- 706567e1-665c-b28b-67bb-d877b8f30aed: ground truth ['BP_UNCONTROLLED', 'DIABETIC_EYE_EXAM_OVERDUE'], mutated engine ['A1C_NOT_TESTED', 'BP_UNCONTROLLED', 'DIABETIC_EYE_EXAM_OVERDUE']
 - 884f1dd3-3944-992f-c1a0-d7c0ae150ef8: ground truth ['STATIN_GAP'], mutated engine ['A1C_NOT_TESTED', 'STATIN_GAP']
+- 98cfffd6-f33b-5bfd-0721-d9b12de391b3: ground truth ['DIABETIC_EYE_EXAM_OVERDUE'], mutated engine ['A1C_NOT_TESTED', 'DIABETIC_EYE_EXAM_OVERDUE']
 
 **comparison_operator_flipped** (`04_bp_uncontrolled.sql`): BP_UNCONTROLLED's threshold comparison inverted (>= became <) - the rule would now flag well-controlled blood pressure as uncontrolled and vice versa for every patient with a hypertension diagnosis and a BP reading.
 
-- f4a72b5a-ce90-a6a0-2e55-b6a9aaadab29: ground truth ['DIABETIC_EYE_EXAM_OVERDUE'], mutated engine ['BP_UNCONTROLLED', 'DIABETIC_EYE_EXAM_OVERDUE']
-- b6096819-2f79-bbe8-6791-8c76c5d0b08d: ground truth [], mutated engine ['BP_UNCONTROLLED']
-- cfc358a2-cf03-b196-bcc8-60ddf2ea9716: ground truth ['BREAST_CANCER_SCREENING_OVERDUE', 'DIABETIC_EYE_EXAM_OVERDUE'], mutated engine ['BP_UNCONTROLLED', 'BREAST_CANCER_SCREENING_OVERDUE', 'DIABETIC_EYE_EXAM_OVERDUE']
-- 461eb375-b781-3638-2ce5-f5a1d9611bc4: ground truth ['BP_UNCONTROLLED', 'BREAST_CANCER_SCREENING_OVERDUE'], mutated engine ['BREAST_CANCER_SCREENING_OVERDUE']
-- a2654f00-0a77-d47c-1c46-886b51edfffd: ground truth [], mutated engine ['BP_UNCONTROLLED']
+- 00f38a8f-fd21-a608-0d0d-a37e6bdf5696: ground truth ['BREAST_CANCER_SCREENING_OVERDUE', 'STATIN_GAP'], mutated engine ['BP_UNCONTROLLED', 'BREAST_CANCER_SCREENING_OVERDUE', 'STATIN_GAP']
+- 02c328d6-dae3-fe97-eee1-24f5eb9bbbc1: ground truth ['BREAST_CANCER_SCREENING_OVERDUE'], mutated engine ['BP_UNCONTROLLED', 'BREAST_CANCER_SCREENING_OVERDUE']
+- 081fcce2-000b-d887-8ce7-d092fb3e0a73: ground truth [], mutated engine ['BP_UNCONTROLLED']
+- 08e66fc7-b5e8-d23a-1128-7d59e85beb3f: ground truth ['COLORECTAL_SCREENING_OVERDUE'], mutated engine ['BP_UNCONTROLLED', 'COLORECTAL_SCREENING_OVERDUE']
+- 0af553c0-1647-d97c-9a0b-53cd0353999f: ground truth ['COLORECTAL_SCREENING_OVERDUE', 'DIABETIC_EYE_EXAM_OVERDUE', 'STATIN_GAP'], mutated engine ['BP_UNCONTROLLED', 'COLORECTAL_SCREENING_OVERDUE', 'DIABETIC_EYE_EXAM_OVERDUE', 'STATIN_GAP']
 
 **diabetes_complication_code_dropped** (`07_statin_gap.sql`): STATIN_GAP's diabetic-cohort definition silently dropped SNOMED 368581000119106 (diabetic neuropathy) from the complication code list - a patient diabetic only by virtue of that code (no base diagnosis, no other complication, no active insulin) would no longer be recognized as diabetic at all by this rule.
 
 Investigated: 0 patients in this dataset have SNOMED 368581000119106 as their ONLY diabetes-qualifying evidence - every patient carrying it also has the base diagnosis, another complication code, or active insulin, so removing it from one rule's list changes nothing for anyone. This is a dataset-redundancy artifact, not a gap in the check's sensitivity: mutating a value that happens to be fully redundant in the current Synthea generation can't produce a detectable difference no matter how correct the detection logic is. A hand-built fixture patient (analogous to eval/fixtures/) whose only diabetes evidence is this one code would close this specific coverage gap.
 
 **3 mutations tested: 2 caught, 1 provably a no-op on this dataset.** Not summarized away.
-The one not caught was investigated and traced to dataset redundancy (see above) - the mutated value never happens to be load-bearing for any real patient in the current Synthea generation, so no discrepancy was possible regardless of check sensitivity. Still a real coverage gap worth closing with a targeted fixture, just not evidence the check itself is broken.
+1 of the misses were investigated and traced to dataset redundancy (see above) - the mutated value never happens to be load-bearing for any real patient in the current Synthea generation, so no discrepancy was possible regardless of check sensitivity. Still a real coverage gap worth closing with a targeted fixture, just not evidence the check itself is broken.
 
 Post-mutation-testing re-check: engine restored cleanly, 0 discrepancies.
 

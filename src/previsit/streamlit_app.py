@@ -17,7 +17,6 @@ from sqlalchemy.engine import Engine
 
 from previsit.agent.graph import generate_previsit_card
 from previsit.agent.guardrails import CITABLE_TABLES
-from previsit.config import settings
 
 st.set_page_config(page_title="Pre-Visit Clinical Intelligence Agent", layout="wide")
 
@@ -54,11 +53,6 @@ def _lookup_citation(engine: Engine, source_resource_id: str) -> tuple[str, dict
 engine = _engine()
 
 st.title("Pre-Visit Clinical Intelligence Agent")
-st.caption(
-    "100% synthetic Synthea-generated patients - no real clinical data. See "
-    "docs/SAFETY_AND_PRIVACY.md. Model pinned to "
-    f"`{settings.llm_model}` (provider `{settings.llm_provider}`)."
-)
 
 with engine.connect() as conn:
     patients = conn.execute(

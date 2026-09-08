@@ -8,7 +8,7 @@ tools return, nothing here computes on its behalf.
 from dataclasses import dataclass
 from datetime import date
 
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
 from sqlalchemy.engine import Engine
 
 from previsit.gaps.definitions import (
@@ -115,19 +115,41 @@ def search_notes(patient_id: str, query: str, k: int = 5) -> list[NoteChunk]:
     return _search_notes(query, patient_id=patient_id, k=k)
 
 
+# Encounter classes worth surfacing on their own: ED visits and inpatient
+# admissions. Everything else (AMB/HH/VR) is routine and only ever reported
+# as a count - see get_recent_encounters below for why.
+NOTABLE_ENCOUNTER_CLASSES = ("EMER", "IMP")
+
+
 def get_recent_encounters(engine: Engine, patient_id: str, months: int = 12) -> list[Encounter]:
-    """SQL. Especially useful for flagging ED visits without follow-up -
-    that judgment happens in the agent's prompt, not here; this just returns
-    the raw encounter history for the window."""
+    """SQL. Returns only 'notable' encounters in the window: an ED visit or
+    hospital admission (NOTABLE_ENCOUNTER_CLASSES) with no follow-up
+    encounter of any kind since. A patient can have dozens of routine
+    encounters in 12 months (one in this dataset has 120) - deciding which
+    of those are worth a clinician's attention is exactly the kind of
+    threshold judgment this project keeps out of the LLM's hands elsewhere
+    (Phase 3 gap rules), so it's decided here in SQL instead of being left
+    to the prompt's "especially an ED visit..." wording and however much of
+    a long raw list the model chooses to narrate. See
+    count_recent_routine_encounters for the rest, reported only as a count."""
     with engine.connect() as conn:
         rows = conn.execute(
             text(
-                "SELECT patient_id, source_resource_id, class, type_display, start_datetime, end_datetime "
-                "FROM fact_encounter WHERE patient_id = :pid "
-                "AND start_datetime >= DATEADD(MONTH, :neg_months, SYSUTCDATETIME()) "
-                "ORDER BY start_datetime DESC"
-            ),
-            {"pid": patient_id, "neg_months": -months},
+                "SELECT r.patient_id, r.source_resource_id, r.class, r.type_display, "
+                "r.start_datetime, r.end_datetime "
+                "FROM fact_encounter r "
+                "WHERE r.patient_id = :pid "
+                "AND r.start_datetime >= DATEADD(MONTH, :neg_months, SYSUTCDATETIME()) "
+                "AND r.class IN :notable_classes "
+                "AND NOT EXISTS ("
+                "  SELECT 1 FROM fact_encounter f2 "
+                "  WHERE f2.patient_id = r.patient_id "
+                "  AND f2.source_resource_id != r.source_resource_id "
+                "  AND f2.start_datetime > COALESCE(r.end_datetime, r.start_datetime)"
+                ") "
+                "ORDER BY r.start_datetime DESC"
+            ).bindparams(bindparam("notable_classes", expanding=True)),
+            {"pid": patient_id, "neg_months": -months, "notable_classes": list(NOTABLE_ENCOUNTER_CLASSES)},
         ).mappings().all()
 
     return [
@@ -141,6 +163,24 @@ def get_recent_encounters(engine: Engine, patient_id: str, months: int = 12) -> 
         )
         for r in rows
     ]
+
+
+def count_recent_routine_encounters(engine: Engine, patient_id: str, months: int = 12) -> int:
+    """Total encounters in the window minus the notable ones get_recent_encounters
+    already surfaced - reported to the LLM as a bare count so a high-volume
+    patient's routine visit history can't inflate the card or leak into the
+    prompt as a giant list, while still being visible that it exists."""
+    with engine.connect() as conn:
+        total = conn.execute(
+            text(
+                "SELECT COUNT(*) FROM fact_encounter "
+                "WHERE patient_id = :pid "
+                "AND start_datetime >= DATEADD(MONTH, :neg_months, SYSUTCDATETIME())"
+            ),
+            {"pid": patient_id, "neg_months": -months},
+        ).scalar_one()
+    notable = len(get_recent_encounters(engine, patient_id, months=months))
+    return total - notable
 
 
 # --- find_documentation_gaps -------------------------------------------------

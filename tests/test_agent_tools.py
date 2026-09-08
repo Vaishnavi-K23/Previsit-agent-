@@ -8,6 +8,7 @@ from previsit.agent.tools import (
     MAX_CITED_SOURCE_IDS,
     RECURRENCE_THRESHOLD,
     check_care_gaps,
+    count_recent_routine_encounters,
     find_documentation_gaps,
     get_patient_summary,
     get_recent_encounters,
@@ -234,11 +235,48 @@ def test_get_patient_summary_raises_for_unknown_patient(engine):
 def test_get_recent_encounters_respects_month_window(engine, patient_id, cleanup):
     _insert_patient(engine, patient_id)
     now = datetime.utcnow()
-    _insert_encounter(engine, patient_id, now - timedelta(days=30))  # within 12 months
-    _insert_encounter(engine, patient_id, now - timedelta(days=400))  # outside 12 months
+    _insert_encounter(engine, patient_id, now - timedelta(days=30), cls="EMER")  # within 12 months
+    _insert_encounter(engine, patient_id, now - timedelta(days=400), cls="EMER")  # outside 12 months
 
     encounters = get_recent_encounters(engine, patient_id, months=12)
     assert len(encounters) == 1
+
+
+def test_get_recent_encounters_excludes_routine_classes(engine, patient_id, cleanup):
+    _insert_patient(engine, patient_id)
+    now = datetime.utcnow()
+    _insert_encounter(engine, patient_id, now - timedelta(days=10), cls="AMB")
+
+    assert get_recent_encounters(engine, patient_id, months=12) == []
+
+
+def test_get_recent_encounters_excludes_ed_visit_with_followup(engine, patient_id, cleanup):
+    _insert_patient(engine, patient_id)
+    now = datetime.utcnow()
+    _insert_encounter(engine, patient_id, now - timedelta(days=60), cls="EMER")
+    _insert_encounter(engine, patient_id, now - timedelta(days=30), cls="AMB")  # follow-up since
+
+    assert get_recent_encounters(engine, patient_id, months=12) == []
+
+
+def test_get_recent_encounters_keeps_ed_visit_without_followup(engine, patient_id, cleanup):
+    _insert_patient(engine, patient_id)
+    now = datetime.utcnow()
+    _insert_encounter(engine, patient_id, now - timedelta(days=30), cls="IMP")
+
+    encounters = get_recent_encounters(engine, patient_id, months=12)
+    assert len(encounters) == 1
+    assert encounters[0].encounter_class == "IMP"
+
+
+def test_count_recent_routine_encounters_excludes_notable_ones(engine, patient_id, cleanup):
+    _insert_patient(engine, patient_id)
+    now = datetime.utcnow()
+    _insert_encounter(engine, patient_id, now - timedelta(days=30), cls="AMB")  # routine
+    _insert_encounter(engine, patient_id, now - timedelta(days=20), cls="AMB")  # routine
+    _insert_encounter(engine, patient_id, now - timedelta(days=10), cls="EMER")  # notable (no follow-up since)
+
+    assert count_recent_routine_encounters(engine, patient_id, months=12) == 2
 
 
 # --- thin wrappers: smoke-test the delegation itself --------------------------

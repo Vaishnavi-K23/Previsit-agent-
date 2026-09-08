@@ -27,6 +27,7 @@ from previsit.agent.guardrails import validate_findings
 from previsit.agent.prompts import SYSTEM_PROMPT
 from previsit.agent.tools import (
     check_care_gaps,
+    count_recent_routine_encounters,
     find_documentation_gaps,
     get_patient_summary,
     get_recent_encounters,
@@ -44,6 +45,7 @@ class AgentState(TypedDict, total=False):
     patient_summary: PatientSummary
     gaps: list[Gap]
     recent_encounters: list[Encounter]
+    routine_encounter_count: int
     documentation_gaps: list[DocumentationGap]
     note_chunks: list[NoteChunk]
     raw_findings: list[dict]
@@ -80,6 +82,7 @@ def gather_structured_data(state: AgentState) -> dict:
         "patient_summary": get_patient_summary(engine, patient_id),
         "gaps": check_care_gaps(engine, patient_id),
         "recent_encounters": get_recent_encounters(engine, patient_id),
+        "routine_encounter_count": count_recent_routine_encounters(engine, patient_id),
         "documentation_gaps": find_documentation_gaps(engine, patient_id),
     }
 
@@ -123,14 +126,25 @@ def _format_structured_context(state: AgentState) -> str:
         lines.append("  none")
 
     lines.append("")
-    lines.append("Recent encounters:")
+    lines.append(
+        "Recent notable encounters (ED visits/admissions with no follow-up since - "
+        "already filtered, report these, don't re-derive which ones count):"
+    )
     for enc in state.get("recent_encounters", []):
         lines.append(
             f"  {enc.start_datetime} class={enc.encounter_class} {enc.type_display} "
             f"(source_resource_id: {enc.source_resource_id})"
         )
     if not state.get("recent_encounters"):
-        lines.append("  none in the last 12 months")
+        lines.append("  none")
+
+    routine_count = state.get("routine_encounter_count", 0)
+    if routine_count:
+        lines.append(
+            f"  ({routine_count} additional routine encounter(s) in the last 12 months, "
+            "not individually listed - do not enumerate or invent details about these, "
+            "a count is all that's known here)"
+        )
 
     note_chunks = state.get("note_chunks") or []
     if note_chunks:
