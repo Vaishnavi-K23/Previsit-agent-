@@ -22,11 +22,16 @@ def check_sqlserver() -> tuple[bool, str]:
         f"DRIVER={{{settings.mssql_driver}}};"
         f"SERVER={settings.mssql_host},{settings.mssql_port};"
         f"DATABASE=master;"
-        f"UID=sa;PWD={settings.mssql_sa_password};"
+        f"UID={settings.mssql_username};PWD={settings.mssql_sa_password};"
         f"TrustServerCertificate=yes;"
     )
+    # A managed/serverless database (e.g. Azure SQL Database's free offer)
+    # auto-pauses after inactivity - the first connection after a pause has
+    # to wait for it to resume, which a short timeout would misreport as a
+    # real connection failure. See previsit.ingest.loader.get_engine.
+    timeout = 45 if settings.mssql_is_managed else 5
     try:
-        with pyodbc.connect(conn_str, timeout=5) as conn:
+        with pyodbc.connect(conn_str, timeout=timeout) as conn:
             row = conn.cursor().execute("SELECT @@VERSION").fetchone()
         version = row[0].splitlines()[0] if row else "unknown version"
         return True, version
@@ -35,12 +40,10 @@ def check_sqlserver() -> tuple[bool, str]:
 
 
 def check_qdrant() -> tuple[bool, str]:
-    from qdrant_client import QdrantClient
+    from previsit.retrieval.vector_tools import get_client
 
     try:
-        client = QdrantClient(
-            host=settings.qdrant_host, port=settings.qdrant_http_port, timeout=5
-        )
+        client = get_client(timeout=5)
         collections = client.get_collections()
         return True, f"{len(collections.collections)} collection(s) present"
     except Exception as exc:  # noqa: BLE001 - report exact connection failure to the user

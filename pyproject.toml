@@ -7,7 +7,7 @@ name = "previsit-agent"
 version = "0.1.0"
 description = "Pre-visit clinical intelligence agent over synthetic (Synthea) patient data — care-gap detection and documentation-completeness checking, not diagnosis or billing."
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.11,<4.0"
 license = { text = "MIT" }
 
 dependencies = [

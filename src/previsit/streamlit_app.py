@@ -17,6 +17,7 @@ from sqlalchemy.engine import Engine
 
 from previsit.agent.graph import generate_previsit_card
 from previsit.agent.guardrails import CITABLE_TABLES
+from previsit.cache import get_cached_card, save_card
 
 st.set_page_config(page_title="Pre-Visit Clinical Intelligence Agent", layout="wide")
 
@@ -74,23 +75,33 @@ options = {
 label = st.selectbox("Patient", list(options.keys()))
 patient_id = options[label]
 
-if "cards" not in st.session_state:
-    st.session_state.cards = {}
-
-generate = st.button("Generate / refresh card", type="primary")
-
-if generate:
+def _generate_and_cache(patient_id: str) -> None:
     with st.spinner(f"Generating card for {patient_id} (live LLM call, pinned model - may take 10-80s)..."):
         try:
-            st.session_state.cards[patient_id] = generate_previsit_card(engine, patient_id)
+            card = generate_previsit_card(engine, patient_id)
+            save_card(engine, card)
         except Exception as exc:  # noqa: BLE001 - surface the real error to the demo user, don't crash the app
             st.error(f"Card generation failed: {type(exc).__name__}: {exc}")
 
-card = st.session_state.cards.get(patient_id)
+
+# Persisted cache (sql/04_card_cache.sql), not per-browser-session state:
+# once ANY visitor generates a patient's card, every later visitor gets it
+# back instantly with zero further LLM calls - important when everyone
+# viewing this demo shares one provider's small daily request quota.
+card = get_cached_card(engine, patient_id)
 
 if card is None:
-    st.info("Click **Generate / refresh card** to produce a pre-visit card for this patient.")
+    st.info("No cached card for this patient yet.")
+    if st.button("Generate card", type="primary"):
+        _generate_and_cache(patient_id)
+        st.rerun()
 else:
+    st.caption("Loaded from cache - instant, no LLM call. Use Force regenerate below for a fresh live run.")
+    if st.button("Force regenerate (uses a live LLM call)"):
+        _generate_and_cache(patient_id)
+        st.rerun()
+
+if card is not None:
     st.subheader(card.one_line_summary or "(no summary)")
     st.caption(f"Generated {card.generated_at.isoformat()}Z by `{card.model_used}`")
 

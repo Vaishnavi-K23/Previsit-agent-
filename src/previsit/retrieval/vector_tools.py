@@ -25,8 +25,13 @@ def _get_model() -> SentenceTransformer:
     return _model
 
 
-def get_client() -> QdrantClient:
-    return QdrantClient(host=settings.qdrant_host, port=settings.qdrant_http_port)
+def get_client(timeout: float | None = None) -> QdrantClient:
+    """Local Docker Qdrant by default. Set QDRANT_URL (+ QDRANT_API_KEY) to
+    point at a Qdrant Cloud cluster instead - the query/filter code above
+    doesn't change either way, only how the client connects."""
+    if settings.qdrant_url:
+        return QdrantClient(url=settings.qdrant_url, api_key=settings.qdrant_api_key or None, timeout=timeout)
+    return QdrantClient(host=settings.qdrant_host, port=settings.qdrant_http_port, timeout=timeout)
 
 
 def search_notes(

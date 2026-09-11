@@ -23,9 +23,11 @@ from pathlib import Path
 
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
+from sqlalchemy.exc import DBAPIError
 
 from previsit.config import settings
 from previsit.ingest.fhir_parser import ParsedBundle, parse_bundle
+from previsit.retry import with_retry
 
 SQL_DIR = Path(__file__).resolve().parents[3] / "sql"
 
@@ -139,7 +141,40 @@ BUNDLE_KEY_BY_TABLE = {
 
 
 def get_engine() -> Engine:
-    return create_engine(settings.mssql_connection_string, fast_executemany=True)
+    """Every caller of this function - not just this module's own load/reset
+    functions, but agent/tools.py, guardrails.py, the Streamlit app, the
+    FastAPI and MCP servers - gets the same protection, because a managed
+    database can transiently refuse a brand-new connection at any time, not
+    just during a bulk load: Azure SQL Database's free offer has returned
+    error 40613 ("not currently available, retry later") on a plain ad-hoc
+    query, well after the initial ingest had already finished successfully.
+    A `connect_args={"timeout": ...}` engine has no way to recover from that
+    - the failure happens before there's a live connection for anything to
+    retry - so a custom `creator` is used instead: the *creation* of the raw
+    connection itself goes through with_retry, protecting every query this
+    engine will ever run, not just the ones this module happens to wrap.
+
+    Separately, a serverless/free-tier database also auto-pauses after
+    inactivity, and the first connection after a pause has to wait for it to
+    resume (observed taking >5s, comfortably under the 45s timeout below) -
+    a generous timeout costs nothing for an already-warm connection (local
+    Docker SQL Server included), it only matters for a real cold start.
+    """
+    timeout = 45 if settings.mssql_is_managed else None
+
+    def creator():
+        import pyodbc
+
+        driver = settings.mssql_driver
+        conn_str = (
+            f"DRIVER={{{driver}}};SERVER={settings.mssql_host},{settings.mssql_port};"
+            f"DATABASE={settings.mssql_database};UID={settings.mssql_username};"
+            f"PWD={settings.mssql_sa_password};TrustServerCertificate=yes;"
+        )
+        kwargs = {"timeout": timeout} if timeout else {}
+        return with_retry(lambda: pyodbc.connect(conn_str, **kwargs), (pyodbc.Error,))
+
+    return create_engine("mssql+pyodbc://", creator=creator, fast_executemany=True)
 
 
 def ensure_database() -> None:
@@ -148,14 +183,23 @@ def ensure_database() -> None:
     Has to happen over a separate connection to `master`: you can't CREATE
     DATABASE from within a connection that's already scoped to the
     (possibly not-yet-existing) target database.
+
+    Skipped entirely when settings.mssql_is_managed is True - a managed
+    cloud database (e.g. Azure SQL Database's free offer) needs to be
+    provisioned through the provider's own console, not this CREATE
+    DATABASE statement, specifically so you land on the free tier you
+    picked rather than whatever this statement would default to.
     """
+    if settings.mssql_is_managed:
+        return
+
     import pyodbc
 
     conn_str = (
         f"DRIVER={{{settings.mssql_driver}}};"
         f"SERVER={settings.mssql_host},{settings.mssql_port};"
         f"DATABASE=master;"
-        f"UID=sa;PWD={settings.mssql_sa_password};"
+        f"UID={settings.mssql_username};PWD={settings.mssql_sa_password};"
         f"TrustServerCertificate=yes;"
     )
     conn = pyodbc.connect(conn_str, autocommit=True, timeout=10)
@@ -174,12 +218,28 @@ def _split_sql_batches(sql_text: str) -> list[str]:
     return [b.strip() for b in batches if b.strip()]
 
 
+# A managed database (Azure SQL Database's free offer, seen directly in
+# practice) can transiently refuse a new connection while it's resuming or
+# rebalancing - error 40613, "Database is not currently available. Please
+# retry the connection later." - Microsoft's own documented transient-fault
+# code, expected to be retried, not treated as a real failure. A dropped
+# mid-transfer connection surfaces the same DBAPIError family. See
+# previsit.retry for why the backoff is shaped the way it is.
+def _with_retry(fn):
+    return with_retry(fn, (DBAPIError,))
+
+
 def apply_schema(engine: Engine) -> None:
-    with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
-        for filename in ("01_schema.sql", "02_indexes.sql", "03_chief_complaint.sql"):
-            sql_text = (SQL_DIR / filename).read_text(encoding="utf-8")
-            for batch in _split_sql_batches(sql_text):
-                conn.execute(text(batch))
+    for filename in ("01_schema.sql", "02_indexes.sql", "03_chief_complaint.sql", "04_card_cache.sql"):
+        sql_text = (SQL_DIR / filename).read_text(encoding="utf-8")
+        batches = _split_sql_batches(sql_text)
+
+        def run_file(batches=batches):
+            with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
+                for batch in batches:
+                    conn.execute(text(batch))
+
+        _with_retry(run_file)
 
 
 # SQL Server disallows TRUNCATE on any table referenced by a FOREIGN KEY,
@@ -190,12 +250,36 @@ TABLES_REQUIRING_DELETE = {"dim_patient", "fact_encounter"}
 
 
 def reset_tables(engine: Engine) -> None:
-    with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
-        for table in RESET_ORDER:
-            if table in TABLES_REQUIRING_DELETE:
-                conn.execute(text(f"DELETE FROM {table}"))
-            else:
-                conn.execute(text(f"TRUNCATE TABLE {table}"))
+    def run():
+        with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
+            # card_cache (sql/04_card_cache.sql) references dim_patient but isn't
+            # part of LOAD_ORDER/RESET_ORDER at all - it's populated by actual
+            # card generation later, not by this FHIR load. Still has to be
+            # cleared before dim_patient below, or dim_patient's DELETE would hit
+            # a foreign key violation from these leftover rows - and clearing it
+            # here is correct anyway: a fresh Synthea regeneration means new
+            # random patient_ids, so any previously-cached card is for a patient
+            # that no longer exists after this reload.
+            conn.execute(text("TRUNCATE TABLE card_cache"))
+            for table in RESET_ORDER:
+                if table in TABLES_REQUIRING_DELETE:
+                    conn.execute(text(f"DELETE FROM {table}"))
+                else:
+                    conn.execute(text(f"TRUNCATE TABLE {table}"))
+
+    _with_retry(run)
+
+
+# fact_observation alone is ~975k rows for the full 1175-patient population -
+# pushing that as a single executemany() worked fine against local Docker SQL
+# Server, but over a WAN connection to a managed database it dropped the
+# connection mid-transfer in practice ("communication link failure"). Batching
+# keeps each network operation short enough not to trip whatever timeout or
+# resource limit caused that; retrying per-batch (via _with_retry above), on a
+# fresh connection each attempt, means a transient drop only costs the one
+# in-flight batch, not the whole table, since every prior batch already
+# committed on its own.
+_INSERT_BATCH_SIZE = 5000
 
 
 def _bulk_insert(engine: Engine, table: str, rows: list[dict]) -> None:
@@ -208,8 +292,16 @@ def _bulk_insert(engine: Engine, table: str, rows: list[dict]) -> None:
         f"INSERT INTO {table} ({', '.join(sql_cols)}) "
         f"VALUES ({', '.join(':' + k for k in dict_keys)})"
     )
-    with engine.begin() as conn:
-        conn.execute(stmt, [{k: row[k] for k in dict_keys} for row in rows])
+    payload = [{k: row[k] for k in dict_keys} for row in rows]
+
+    for start in range(0, len(payload), _INSERT_BATCH_SIZE):
+        batch = payload[start : start + _INSERT_BATCH_SIZE]
+
+        def run_batch(batch=batch):
+            with engine.begin() as conn:
+                conn.execute(stmt, batch)
+
+        _with_retry(run_batch)
 
 
 def _iter_patient_bundles(fhir_dir: Path):

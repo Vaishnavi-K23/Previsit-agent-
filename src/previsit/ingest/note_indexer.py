@@ -28,13 +28,22 @@ from datetime import date
 from pathlib import Path
 from typing import TypedDict
 
+import httpx
 from qdrant_client import QdrantClient
 from qdrant_client.http import models as qmodels
+from qdrant_client.http.exceptions import ResponseHandlingException, UnexpectedResponse
 from sentence_transformers import SentenceTransformer
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
 from previsit.config import settings
+from previsit.retry import with_retry
+
+# Qdrant Cloud's free tier has been observed dropping a connection mid-upload
+# ("server disconnected without sending a response") under sustained load -
+# the same class of transient failure as Azure SQL Database's, just a
+# different exception family. See previsit.retry for the shared backoff policy.
+_QDRANT_TRANSIENT_ERRORS = (ResponseHandlingException, UnexpectedResponse, httpx.TransportError)
 
 CHUNK_SIZE_WORDS = 150
 CHUNK_OVERLAP_WORDS = 30
@@ -237,7 +246,10 @@ def index_chunks(
             )
             for r, vector in zip(batch, vectors, strict=True)
         ]
-        client.upsert(collection_name=settings.qdrant_collection, points=points)
+        with_retry(
+            lambda points=points: client.upsert(collection_name=settings.qdrant_collection, points=points),
+            _QDRANT_TRANSIENT_ERRORS,
+        )
         total += len(points)
     return total
 
@@ -276,7 +288,9 @@ def main() -> None:
     print(f"Loading embedding model ({settings.embedding_model})...")
     model = SentenceTransformer(settings.embedding_model)
 
-    client = QdrantClient(host=settings.qdrant_host, port=settings.qdrant_http_port)
+    from previsit.retrieval.vector_tools import get_client
+
+    client = get_client()
     print(f"Recreating Qdrant collection '{settings.qdrant_collection}'...")
     ensure_collection(client)
 
