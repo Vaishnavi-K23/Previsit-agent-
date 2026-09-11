@@ -11,10 +11,12 @@ being reinvented per-service.
 Backoff has to be genuinely patient, not just present: a first attempt at a
 short backoff (a few seconds total) still exhausted every retry while a
 service was transiently unavailable, and a cold-start resume was separately
-confirmed to take up to 45 seconds on its own. Capped exponential backoff up
-to 60s, six attempts (roughly 2-3 minutes of total budget), gives a real
-chance of outlasting a resume/rebalance event instead of just performing a
-retry for its own sake.
+observed taking over two minutes end to end on Streamlit Community Cloud
+(a six-attempt, ~135s-total budget was not enough and exhausted itself while
+the free database was still waking up - confirmed by the database answering
+instantly moments later, once actually awake). Capped exponential backoff up
+to 60s, nine attempts (roughly 5 minutes of total budget), gives real margin
+over a slow resume instead of just performing a retry for its own sake.
 """
 
 import time
@@ -23,7 +25,7 @@ from typing import TypeVar
 
 T = TypeVar("T")
 
-MAX_ATTEMPTS = 6
+MAX_ATTEMPTS = 9
 MAX_BACKOFF_SECONDS = 60
 
 

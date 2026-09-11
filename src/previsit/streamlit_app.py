@@ -55,13 +55,14 @@ engine = _engine()
 
 st.title("Pre-Visit Clinical Intelligence Agent")
 
-with engine.connect() as conn:
-    patients = conn.execute(
-        text(
-            "SELECT patient_id, birth_date, gender, city, state FROM dim_patient "
-            "WHERE deceased_flag = 0 ORDER BY patient_id"
-        )
-    ).mappings().all()
+with st.spinner("Connecting to the database - an idle free-tier database can take a couple of minutes to wake up..."):
+    with engine.connect() as conn:
+        patients = conn.execute(
+            text(
+                "SELECT patient_id, birth_date, gender, city, state FROM dim_patient "
+                "WHERE deceased_flag = 0 ORDER BY patient_id"
+            )
+        ).mappings().all()
 
 if not patients:
     st.error("No patients found in dim_patient - has the ingest pipeline run? See README.md Quickstart.")
