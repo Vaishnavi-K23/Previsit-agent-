@@ -1,0 +1,10 @@
+# Disables Streamlit's dev-time file watcher, which is irrelevant on a
+# deployed app (no local file edits to hot-reload) and otherwise walks every
+# imported module's path looking for changes - including transformers'
+# optional vision submodules, which raise a caught-but-logged
+# ModuleNotFoundError for torchvision (a dependency this project never needs,
+# since sentence-transformers only uses transformers for text embeddings).
+# Confirmed as a known Streamlit/transformers interaction, not a bug in this
+# project: https://discuss.streamlit.io/t/message-error-about-torch/90886
+[server]
+fileWatcherType = "none"
