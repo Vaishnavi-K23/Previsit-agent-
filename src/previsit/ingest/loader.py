@@ -1,12 +1,14 @@
 """Loads parsed FHIR rows into SQL Server. Bulk inserts only - 1175 patients
 means ~1.26M rows across the 8 tables, so no row-by-row INSERTs.
 
-Uses SQLAlchemy's `fast_executemany` engine option rather than calling
-pyodbc's `cursor.fast_executemany` directly: raw pyodbc has a documented
-gotcha where it infers each column's buffer size from the first row in a
-batch, which can silently truncate later, longer values in the same
-column (e.g. `display` text) when row lengths vary a lot, as ours do.
-SQLAlchemy's mssql+pyodbc dialect handles this correctly.
+Uses pymssql, not pyodbc - see get_engine's own docstring for why: pyodbc
+needs Microsoft's own ODBC Driver 18, a system package that can't be
+installed on Streamlit Community Cloud through its supported customization
+mechanism, confirmed directly in practice. Inserts are batched (see
+_INSERT_BATCH_SIZE below) rather than sent as one bulk executemany() -
+pushing ~975k rows (fact_observation, the largest table) as a single
+network operation was observed dropping the connection mid-transfer over a
+WAN link to a managed database.
 
 Idempotency strategy: full wipe-and-reload, not merge/upsert. Simpler,
 and the acceptance bar is just "loading twice produces identical row
@@ -141,7 +143,22 @@ BUNDLE_KEY_BY_TABLE = {
 
 
 def get_engine() -> Engine:
-    """Every caller of this function - not just this module's own load/reset
+    """Uses pymssql, not pyodbc: pyodbc needs Microsoft's own ODBC Driver 18,
+    a system-level package that requires adding Microsoft's private apt repo
+    and accepting a EULA to install - which Streamlit Community Cloud's
+    supported customization (`packages.txt`, plain Debian package names only)
+    cannot do, confirmed directly in practice ("Can't open lib 'ODBC Driver
+    18 for SQL Server' : file not found"). pymssql talks the same TDS wire
+    protocol via FreeTDS, an ordinary open-source package with no EULA,
+    which is installable that way - and works identically against local
+    Docker SQL Server, Azure SQL Database, or any other SQL Server, since
+    the wire protocol is the same regardless of which client library speaks
+    it. Trade-off: pymssql's SQLAlchemy dialect doesn't support
+    `fast_executemany` (a pyodbc-specific feature) - bulk inserts still
+    batch efficiently through pymssql's own executemany, just not via that
+    specific flag.
+
+    Every caller of this function - not just this module's own load/reset
     functions, but agent/tools.py, guardrails.py, the Streamlit app, the
     FastAPI and MCP servers - gets the same protection, because a managed
     database can transiently refuse a brand-new connection at any time, not
@@ -163,18 +180,22 @@ def get_engine() -> Engine:
     timeout = 45 if settings.mssql_is_managed else None
 
     def creator():
-        import pyodbc
+        import pymssql
 
-        driver = settings.mssql_driver
-        conn_str = (
-            f"DRIVER={{{driver}}};SERVER={settings.mssql_host},{settings.mssql_port};"
-            f"DATABASE={settings.mssql_database};UID={settings.mssql_username};"
-            f"PWD={settings.mssql_sa_password};TrustServerCertificate=yes;"
+        kwargs = {"login_timeout": timeout} if timeout else {}
+        return with_retry(
+            lambda: pymssql.connect(
+                server=settings.mssql_host,
+                port=str(settings.mssql_port),
+                user=settings.mssql_username,
+                password=settings.mssql_sa_password,
+                database=settings.mssql_database,
+                **kwargs,
+            ),
+            (pymssql.Error,),
         )
-        kwargs = {"timeout": timeout} if timeout else {}
-        return with_retry(lambda: pyodbc.connect(conn_str, **kwargs), (pyodbc.Error,))
 
-    return create_engine("mssql+pyodbc://", creator=creator, fast_executemany=True)
+    return create_engine("mssql+pymssql://", creator=creator)
 
 
 def ensure_database() -> None:
@@ -193,16 +214,17 @@ def ensure_database() -> None:
     if settings.mssql_is_managed:
         return
 
-    import pyodbc
+    import pymssql
 
-    conn_str = (
-        f"DRIVER={{{settings.mssql_driver}}};"
-        f"SERVER={settings.mssql_host},{settings.mssql_port};"
-        f"DATABASE=master;"
-        f"UID={settings.mssql_username};PWD={settings.mssql_sa_password};"
-        f"TrustServerCertificate=yes;"
+    conn = pymssql.connect(
+        server=settings.mssql_host,
+        port=str(settings.mssql_port),
+        user=settings.mssql_username,
+        password=settings.mssql_sa_password,
+        database="master",
+        autocommit=True,
+        login_timeout=10,
     )
-    conn = pyodbc.connect(conn_str, autocommit=True, timeout=10)
     try:
         conn.cursor().execute(
             f"IF DB_ID('{settings.mssql_database}') IS NULL "

@@ -224,6 +224,17 @@ def ensure_collection(client: QdrantClient) -> None:
         collection_name=settings.qdrant_collection,
         vectors_config=qmodels.VectorParams(size=EMBEDDING_DIM, distance=qmodels.Distance.COSINE),
     )
+    # Qdrant Cloud rejects an unindexed filter outright ("Index required but
+    # not found for patient_id") - confirmed directly against a real Cloud
+    # cluster - whereas local Qdrant tolerated filtering on it unindexed.
+    # search_notes filters on patient_id for every single query (it's the
+    # cross-patient isolation guarantee), so this index isn't optional on
+    # either target.
+    client.create_payload_index(
+        collection_name=settings.qdrant_collection,
+        field_name="patient_id",
+        field_schema=qmodels.PayloadSchemaType.KEYWORD,
+    )
 
 
 def index_chunks(

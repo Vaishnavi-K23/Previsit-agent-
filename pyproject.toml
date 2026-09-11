@@ -16,7 +16,7 @@ dependencies = [
     "pydantic-settings==2.15.0",
     "python-dotenv==1.2.3",
     # relational DB (Phase 2+)
-    "pyodbc==5.3.0",
+    "pymssql==2.4.1",
     "SQLAlchemy==2.0.52",
     # vector store / embeddings (Phase 4)
     "qdrant-client==1.19.0",

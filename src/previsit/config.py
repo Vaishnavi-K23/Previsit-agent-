@@ -13,7 +13,6 @@ class Settings(BaseSettings):
     mssql_database: str = "previsit"
     mssql_username: str = "sa"
     mssql_sa_password: str = ""
-    mssql_driver: str = "ODBC Driver 18 for SQL Server"
     # True for a managed cloud database (e.g. Azure SQL Database's free
     # offer) that you provisioned yourself through the provider's own
     # console - ensure_database()'s CREATE DATABASE IF NOT EXISTS dance is
@@ -58,15 +57,6 @@ class Settings(BaseSettings):
     # API
     api_host: str = "0.0.0.0"
     api_port: int = 8000
-
-    @property
-    def mssql_connection_string(self) -> str:
-        driver = self.mssql_driver.replace(" ", "+")
-        return (
-            f"mssql+pyodbc://{self.mssql_username}:{self.mssql_sa_password}"
-            f"@{self.mssql_host}:{self.mssql_port}/{self.mssql_database}"
-            f"?driver={driver}&TrustServerCertificate=yes"
-        )
 
 
 settings = Settings()

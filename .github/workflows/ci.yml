@@ -20,7 +20,6 @@ jobs:
       MSSQL_HOST: localhost
       MSSQL_PORT: "1433"
       MSSQL_DATABASE: previsit
-      MSSQL_DRIVER: "ODBC Driver 18 for SQL Server"
       QDRANT_HOST: localhost
       QDRANT_HTTP_PORT: "6333"
       QDRANT_GRPC_PORT: "6334"
@@ -45,13 +44,6 @@ jobs:
         with:
           distribution: temurin
           java-version: "21"
-
-      - name: Install Microsoft ODBC Driver 18 (needed by pyodbc)
-        run: |
-          curl -sSL https://packages.microsoft.com/keys/microsoft.asc | sudo tee /etc/apt/trusted.gpg.d/microsoft.asc > /dev/null
-          curl -sSL https://packages.microsoft.com/config/ubuntu/22.04/prod.list | sudo tee /etc/apt/sources.list.d/mssql-release.list
-          sudo apt-get update
-          ACCEPT_EULA=Y sudo apt-get install -y msodbcsql18 unixodbc-dev
 
       - name: Install Python dependencies
         run: pip install -e ".[dev]"
