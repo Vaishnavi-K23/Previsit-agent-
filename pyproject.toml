@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "Pre-visit clinical intelligence agent over synthetic (Synthea) patient data — care-gap detection and documentation-completeness checking, not diagnosis or billing."
 readme = "README.md"
 requires-python = ">=3.11,<4.0"
-license = { text = "MIT" }
+license = "MIT"
 
 dependencies = [
     # config
@@ -55,6 +55,21 @@ dev = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/previsit"]
+
+# Local dev and CI use hatchling (the declared [build-system] backend) via
+# `pip install -e .`, which reads [tool.hatch.build] above. Streamlit
+# Community Cloud's builder uses Poetry instead when it finds a
+# pyproject.toml, and Poetry does not read hatchling's own packages config -
+# without this section it fails outright ("No file/folder found for package
+# previsit-agent") trying to install the project using its own convention
+# (a directory matching the project name at the repo root), which doesn't
+# match this src-layout package. Verified directly against a real Poetry
+# install, not assumed from documentation: package-mode = false alone (the
+# error message's other suggested fix) makes the install succeed but leaves
+# `previsit` genuinely unimportable at runtime - this `packages` declaration
+# is the one that actually installs the package correctly under Poetry too.
+[tool.poetry]
+packages = [{ include = "previsit", from = "src" }]
 
 [tool.ruff]
 # Raised from the original 100 to 120 when CI was added (Phase 8): `ruff
